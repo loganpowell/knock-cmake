@@ -31,10 +31,10 @@ set(utilsCommon_SOURCES utils/drmprocessorclientimpl.cpp utils/utils_common.cpp)
 # unfortunately cmake can't build both static and shared
 if(BUILD_STATIC)
     add_library(libgourou STATIC ${libgourou_SOURCES})
-    add_library(libgourou::utils STATIC ${utilsCommon_SOURCES})
+    add_library(libgourou_utils STATIC ${utilsCommon_SOURCES})
 elseif(BUILD_SHARED)
     add_library(libgourou SHARED ${libgourou_SOURCES})
-    add_library(libgourou::utils SHARED ${utilsCommon_SOURCES})
+    add_library(libgourou_utils SHARED ${utilsCommon_SOURCES})
 endif()
 
 
@@ -45,13 +45,13 @@ add_subdirectory(${updfparser_DIR} ${CMAKE_BINARY_DIR}/uPDFParser EXCLUDE_FROM_A
 target_include_directories(libgourou PUBLIC ${updfparser_DIR}/include)
 
 find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
-target_include_directories(libgourou::utils PUBLIC ${OPENSSL_INCLUDE_DIR})
+target_include_directories(libgourou_utils PUBLIC ${OPENSSL_INCLUDE_DIR})
 
 find_package(CURL REQUIRED)
-target_include_directories(libgourou::utils PUBLIC ${CURL_INCLUDE_DIRS})
+target_include_directories(libgourou_utils PUBLIC ${CURL_INCLUDE_DIRS})
 
 include(FindZLIB REQUIRED)
-target_include_directories(libgourou::utils PUBLIC ${ZLIB_INCLUDE_DIRS})
+target_include_directories(libgourou_utils PUBLIC ${ZLIB_INCLUDE_DIRS})
 
 include(FetchContent)
 FetchContent_Declare(
@@ -73,7 +73,7 @@ target_link_libraries(libgourou
     PUBLIC libupdfparser
     PUBLIC pugixml::pugixml
 )
-target_link_libraries(libgourou::utils
+target_link_libraries(libgourou_utils
     PUBLIC libgourou
     PUBLIC pugixml::pugixml
     PUBLIC ${OPENSSL_LIBRARIES}
