@@ -45,7 +45,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libpugixml)
 # target_compile_options(pugixml INTERFACE "-FI ${CMAKE_BINARY_DIR}/_deps/libpugixml-src/src/pugixml.cpp")
 
-set(updfparser_DIR ${CMAKE_SOURCE_DIR}/uPDFParser)
+set(updfparser_DIR ${CMAKE_SOURCE_DIR}/lib/uPDFParser)
 add_subdirectory(${updfparser_DIR} ${CMAKE_BINARY_DIR}/uPDFParser EXCLUDE_FROM_ALL)
 include_directories(${updfparser_DIR}/include)
 
