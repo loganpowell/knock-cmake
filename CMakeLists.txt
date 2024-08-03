@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(knock-cmake VERSION v79 LANGUAGES C CXX)
+project(knock-cmake VERSION 3.0.79 LANGUAGES C CXX)
 
 set(BUILD_STATIC 1)
 set(BUILD_SHARED 0)
