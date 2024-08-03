@@ -64,6 +64,7 @@ def clean():
 def autoget_apt_pkg():
     if (not check_binary_dependency("apt")) or (not os.geteuid() == 0):
         print("Auto pkg get not available; Please ensure the following libraries are installed: build-essential, git, cmake, libssl-dev, libcurl4-openssl-dev, zlib1g-dev")
+        return
     run(["apt", "install", "build-essential", "git", "cmake", "libssl-dev", "libcurl4-openssl-dev", "zlib1g-dev", "-y"])
 
 # This can be done through a shell if python is not available, just follow the steps and use equivalent commands in shell
