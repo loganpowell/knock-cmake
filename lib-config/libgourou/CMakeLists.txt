@@ -44,13 +44,13 @@ set(updfparser_DIR ${CMAKE_SOURCE_DIR}/lib/uPDFParser)
 add_subdirectory(${updfparser_DIR} ${CMAKE_BINARY_DIR}/uPDFParser EXCLUDE_FROM_ALL)
 target_include_directories(libgourou PUBLIC ${updfparser_DIR}/include)
 
-find_package(OpenSSL COMPONENTS Crypto SSL REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
 target_include_directories(libgourou::utils PUBLIC ${OPENSSL_INCLUDE_DIR})
 
 find_package(CURL REQUIRED)
 target_include_directories(libgourou::utils PUBLIC ${CURL_INCLUDE_DIRS})
 
-include(FindZLIB)
+include(FindZLIB REQUIRED)
 target_include_directories(libgourou::utils PUBLIC ${ZLIB_INCLUDE_DIRS})
 
 include(FetchContent)
