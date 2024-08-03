@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14.0)
 
 file(READ "include/libgourou.h" file_contain_version)
-string(REGEX MATCH "\#define\s*LIBGOUROU_VERSION\s*\"(.*)\"" _ file_contain_version)
+string(REGEX MATCH "\#define[ \t\r\n]*LIBGOUROU_VERSION[ \t\r\n]*\"(.*)\"" _ file_contain_version)
 project(libgourou VERSION ${CMAKE_MATCH_1} LANGUAGES C CXX)
 
 # CXXFLAGS
