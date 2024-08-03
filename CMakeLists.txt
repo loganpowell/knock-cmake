@@ -14,6 +14,7 @@ target_include_directories(knock
     PUBLIC ${CMAKE_SOURCE_DIR}/lib/libgourou/utils)
 target_link_libraries(knock 
     PUBLIC libgourou
+    PUBLIC libgourou_utils
 )
 target_compile_definitions(knock
     PUBLIC KNOCK_VERSION="${CMAKE_PROJECT_VERSION}"

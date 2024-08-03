@@ -88,5 +88,5 @@ if __name__ == "__main__":
     
     # run cmake configure and build commands 
     run(["cmake", "-S", ".", "-B", "./~build"], cwd=SOURCE_DIR)
-    run(["cmake", "--build", "./~build", "--config", "Release"], cwd=SOURCE_DIR)
+    run(["cmake", "--build", "./~build", "--config", "Release", "-j", str(os.cpu_count())], cwd=SOURCE_DIR)
     print("build finished")
