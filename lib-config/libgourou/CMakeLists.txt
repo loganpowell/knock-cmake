@@ -66,7 +66,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nih-at/libzip.git
     GIT_TAG v1.10.1
 )
-set(LIBZIP_DO_INSTALL OFF) # prevent libzip from installing 
+set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE) # prevent libzip from installing 
 
 FetchContent_MakeAvailable(libpugixml libzip)
 
