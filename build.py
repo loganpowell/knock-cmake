@@ -53,7 +53,7 @@ def cp(sourcePath: Path, targetPath: Path, copyContents:bool = False):
         shutil.copytree(sourcePath, newTarget, dirs_exist_ok=True)
 
 def rmdir_if_exist(path):
-    if Path(path).exists(): os.rmdir(path)
+    if Path(path).exists(): shutil.rmtree(path, ignore_errors=True)
 
 def clean():
     rmdir_if_exist(libgourou_lib_dir)
