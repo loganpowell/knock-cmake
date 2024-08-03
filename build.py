@@ -20,10 +20,11 @@ updfparser_lib_dir = f"{SOURCE_DIR}/lib/uPDFParser"
 #     _namedArgs.setdefault("stdout", subprocess.PIPE)
 #     return subprocess.run(*_args, **_namedArgs)
 
-def check_binary_dependency(name: str) -> bool:
+def check_binary_dependency(name: str, critical=True) -> bool:
     try:
         proc = run("git", stdout=subprocess.PIPE, stderr=subprocess.PIPE) # pipe to silence the help messages
     except FileNotFoundError:
+        if not critical: return False
         raise f"This script needs `{name}`, but `{name}` is not found."
     return True
 
@@ -60,13 +61,22 @@ def clean():
     rmdir_if_exist(updfparser_lib_dir)
     rmdir_if_exist(f"{SOURCE_DIR}/~build")
 
+def autoget_apt_pkg():
+    if (not check_binary_dependency("apt")) or (not os.geteuid() == 0):
+        print("Auto pkg get not available; Please ensure the following libraries are installed: build-essential, git, cmake, libssl-dev, libcurl4-openssl-dev, zlib1g-dev")
+    run(["apt", "install", "build-essential", "git", "cmake", "libssl-dev", "libcurl4-openssl-dev", "zlib1g-dev", "-y"])
+
 # This can be done through a shell if python is not available, just follow the steps and use equivalent commands in shell
 if __name__ == "__main__":
-    check_binary_dependency("git")
-    check_binary_dependency("cmake")
-
     #clean repo of old build artifacts
     clean()
+
+    # install package manager dependencies if apt is available 
+    autoget_apt_pkg()
+
+    # check if build tools 
+    check_binary_dependency("git")
+    check_binary_dependency("cmake")
 
     # grab dependencies that needs to be grabbed before cmake
     get_git_repo("https://forge.soutade.fr/soutade/libgourou.git", libgourou_lib_dir , "master", "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
