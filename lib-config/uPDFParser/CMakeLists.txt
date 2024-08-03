@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14.0)
 
-project(uPDFParser VERSION 0.0.1 LANGUAGES C CXX)
+project(uPDFParser VERSION 0.0.0 LANGUAGES C CXX)
 
 # CXXFLAGS
 # add_compile_options("-Wall" "-fPIC")
