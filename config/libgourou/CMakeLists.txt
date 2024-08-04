@@ -34,11 +34,6 @@ set(utilsCommon_SOURCES utils/drmprocessorclientimpl.cpp utils/utils_common.cpp)
 if(BUILD_STATIC)
     add_library(libgourou STATIC ${libgourou_SOURCES})
     add_library(libgourou_utils STATIC ${utilsCommon_SOURCES})
-    
-    set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
-#    target_link_options(libgourou_utils PUBLIC "-static")
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" CACHE STRING "" FORCE)
-
 elseif(BUILD_SHARED)
     add_library(libgourou SHARED ${libgourou_SOURCES})
     add_library(libgourou_utils SHARED ${utilsCommon_SOURCES})
@@ -67,12 +62,12 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/zeux/pugixml.git
     GIT_TAG 30cc354fe37114ec7a0a4ed2192951690357c2ed
 )
+set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE) # prevent libzip from installing 
 FetchContent_Declare(
     libzip
     GIT_REPOSITORY https://github.com/nih-at/libzip.git
     GIT_TAG v1.10.1
 )
-set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE) # prevent libzip from installing 
 
 FetchContent_MakeAvailable(libpugixml libzip)
 
