@@ -1,8 +1,8 @@
-result
 .vscode
-knock
 
+~*
 ~build
+~checkout
 # ignore all downloaded libs
 lib/*
 

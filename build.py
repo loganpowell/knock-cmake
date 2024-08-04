@@ -12,8 +12,11 @@ from pathlib import Path
 #     raise "This is a script, not a module!"
 
 SOURCE_DIR = Path(__file__).resolve().parent
-libgourou_lib_dir = f"{SOURCE_DIR}/lib/libgourou"
-updfparser_lib_dir = f"{SOURCE_DIR}/lib/uPDFParser"
+BUILD_DIR = f"{SOURCE_DIR}/~build"
+CHECKOUT_DIR = f"{SOURCE_DIR}/~checkout"
+libgourou_dir = f"{CHECKOUT_DIR}/libgourou"
+updfparser_dir = f"{CHECKOUT_DIR}/uPDFParser"
+knock_dir = f"{CHECKOUT_DIR}/knock"
 
 # def run(*_args,**_namedArgs) -> subprocess.CompletedProcess[bytes]:
 #     _namedArgs.setdefault("stderr", subprocess.PIPE)
@@ -57,9 +60,8 @@ def rmdir_if_exist(path):
     if Path(path).exists(): shutil.rmtree(path)
 
 def clean():
-    rmdir_if_exist(libgourou_lib_dir)
-    rmdir_if_exist(updfparser_lib_dir)
-    rmdir_if_exist(f"{SOURCE_DIR}/~build")
+    rmdir_if_exist(CHECKOUT_DIR)
+    rmdir_if_exist(BUILD_DIR)
 
 def autoget_apt_pkg():
     if (not check_binary_dependency("apt")) or (not os.geteuid() == 0):
@@ -80,15 +82,17 @@ if __name__ == "__main__":
     check_binary_dependency("cmake")
 
     # grab dependencies that needs to be grabbed before cmake
-    get_git_repo("https://forge.soutade.fr/soutade/libgourou.git", libgourou_lib_dir , "master", "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
-    get_git_repo("https://forge.soutade.fr/soutade/uPDFParser", updfparser_lib_dir , "master", "6060d123441a06df699eb275ae5ffdd50409b8f3")
-    
+    get_git_repo("https://forge.soutade.fr/soutade/libgourou.git", libgourou_dir , "master", "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
+    get_git_repo("https://forge.soutade.fr/soutade/uPDFParser", updfparser_dir , "master", "6060d123441a06df699eb275ae5ffdd50409b8f3")
+    get_git_repo("https://github.com/BentonEdmondson/knock", knock_dir, "79", "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
+
     # copy the needed build configuration files into those dependencies 
-    cp(f"{SOURCE_DIR}/lib-config/libgourou/", libgourou_lib_dir, True)
-    cp(f"{SOURCE_DIR}/lib-config/uPDFParser", updfparser_lib_dir, True)
+    cp(f"{SOURCE_DIR}/config/libgourou/", libgourou_dir, True)
+    cp(f"{SOURCE_DIR}/config/uPDFParser", updfparser_dir, True)
+    cp(f"{SOURCE_DIR}/config/knock", knock_dir, True)
     
     # run cmake configure and build commands 
-    run(["cmake", "-S", ".", "-B", "./~build"], cwd=SOURCE_DIR)
-    run(["cmake", "--build", "./~build", "--config", "Release", "-j", str(os.cpu_count())], cwd=SOURCE_DIR)
+    run(["cmake", "-S", ".", "-B", BUILD_DIR], cwd=SOURCE_DIR)
+    run(["cmake", "--build", BUILD_DIR, "--config", "Release", "-j", str(os.cpu_count())], cwd=SOURCE_DIR)
     
-    print(f"build finished, the knock binary is located in: {SOURCE_DIR}/~build/")
+    print(f"build finished, the knock binary is located in: {BUILD_DIR}")
