@@ -37,7 +37,7 @@ if(BUILD_STATIC)
     
     set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) # force openssl static link
     set(CURL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) #force curl static link
-    set(ZLIB_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) #force zlib static link)
+    target_link_libraries(libgourou_utils "-static") #use the static flag instead of ZLIB_USE_STATIC_LIBS because the 3.24 requirement is a bit high
 
 elseif(BUILD_SHARED)
     add_library(libgourou SHARED ${libgourou_SOURCES})
