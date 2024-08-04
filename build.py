@@ -94,5 +94,6 @@ if __name__ == "__main__":
     # run cmake configure and build commands 
     run(["cmake", "-S", ".", "-B", BUILD_DIR], cwd=SOURCE_DIR)
     run(["cmake", "--build", BUILD_DIR, "--config", "Release", "-j", str(os.cpu_count())], cwd=SOURCE_DIR)
+    run(["cmake", "--install", BUILD_DIR], cwd=SOURCE_DIR)
     
-    print(f"build finished, the knock binary is located in: {BUILD_DIR}")
+    print(f"build finished, the knock binary is located in: {SOURCE_DIR}/knock")

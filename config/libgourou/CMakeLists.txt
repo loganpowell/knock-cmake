@@ -41,8 +41,9 @@ endif()
 
 
 #find denpendencies
-
-set(updfparser_DIR ${CMAKE_SOURCE_DIR}/lib/uPDFParser)
+if(NOT DEFINED updfparser_DIR)
+    message(FATAL_ERROR "libgourou depends on uPDFParser, please define udpfparser_DIR so cmake can find it.")
+endif()
 add_subdirectory(${updfparser_DIR} ${CMAKE_BINARY_DIR}/uPDFParser EXCLUDE_FROM_ALL)
 target_include_directories(libgourou PUBLIC ${updfparser_DIR}/include)
 
