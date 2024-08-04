@@ -59,6 +59,7 @@ def rmdir_if_exist(path):
 def clean():
     rmdir_if_exist(CHECKOUT_DIR)
     rmdir_if_exist(BUILD_DIR)
+    rmdir_if_exist(INSTALL_DIR)
 
 def autoget_apt_pkg():
     if (not check_binary_dependency("apt")) or (not os.geteuid() == 0):
