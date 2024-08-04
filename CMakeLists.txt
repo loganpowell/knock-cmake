@@ -16,7 +16,8 @@ set(BUILD_STATIC ON CACHE BOOL ${HELP} FORCE)
 set(BUILD_SHARED OFF CACHE BOOL ${HELP} FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL ${HELP} FORCE)
 set(BUILD_STATIC_LIBS ON CACHE BOOL ${HELP} FORCE)
-set(CMAKE_EXE_LINKER_FLAGS "-static") # enforce linking static on pre-built libraries
+#set(CMAKE_EXE_LINKER_FLAGS "-static") # enforce linking static on pre-built libraries
+set(CMAKE_EXE_LINKER_FLAGS "-static-libstdc++ -static-libgcc")
 
 # this script is set up to track version 79 of knock
 set(KNOCK_VERSION "3.0.79" CACHE STRING ${HELP} FORCE)

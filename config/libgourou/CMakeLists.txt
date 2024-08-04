@@ -35,7 +35,8 @@ if(BUILD_STATIC)
     add_library(libgourou STATIC ${libgourou_SOURCES})
     add_library(libgourou_utils STATIC ${utilsCommon_SOURCES})
     
-    target_link_options(libgourou_utils PUBLIC "-static")
+    set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+#    target_link_options(libgourou_utils PUBLIC "-static")
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" CACHE STRING "" FORCE)
 
 elseif(BUILD_SHARED)
