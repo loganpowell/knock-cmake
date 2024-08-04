@@ -1,87 +1,54 @@
-# Knock
+# Knock-CMake
 
-Convert ACSM files to PDF/EPUBs with one command on Linux.
+Knock-CMake is a project that allows the compilation of Knock using CMake on any *unix OS with various processor architectures. 
 
-![Demonstration of CLI usage](./assets/demo.png)
+Knock can Convert ACSM files to PDF/EPUBs with one command on Linux.
 
 *This software does not utilize Adobe Digital Editions nor Wine. It is completely free and open-source software written natively for Linux.*
 
-## Downtime
-
-Knock was taken down between late 2022 and mid-2024 pending a legal concern that has now been resolved.
+This is a special build script for knock. You can find the original knock repository here: [https://github.com/BentonEdmondson/knock](https://github.com/BentonEdmondson/knock). Special thanks to Benton Edmondson and all the other knock contributors.
 
 ## Installation
 
-1. Run `uname -ms` and, based on the output, download the latest corresponding [release](https://github.com/BentonEdmondson/knock/releases).
-1. `cd` into the directory that knock is in (e.g. `cd ~/Downloads`).
-1. Run `mv knock-version-arch-os knock` to rename the binary to `knock`.
-1. Run `chmod +x knock` to make it executable.
-1. Run `./knock ./path/to/book.acsm` to perform the conversion.
-1. Run `mv knock ~/.local/bin` to allow it to be run from anywhere (might not work on some distributions).
+NOTE: For x86-64 users, you may simply go to the [knock repository's release page](https://github.com/BentonEdmondson/knock/releases) to download a binary. The binary published by the upstream knock repository does not require any of the runtime dependencies here.
 
-### Nix and NixOS (with [flakes](https://nixos.wiki/wiki/Flakes) enabled)
-
-If you are on a system with [Nix](https://github.com/NixOS/nix), you can use the following.
-
-```
-nix profile install github:BentonEdmondson/knock
-```
-
-If you are on [NixOS](https://github.com/NixOS/nixpkgs), you can add the flake to your system config.
+1. Get to [releases](https://github.com/Alvin-He/knock-cmake/knock/releases) to get the latest release.
+    - *if older knock releases is needed, this repository's release version numbers should match up with the [upstream Knock repository's release page.](https://github.com/BentonEdmondson/knock/releases)*
+    - convenient git clone command to get the latest release: `git clone https://github.com/Alvin-He/knock-cmake -b latest`
+2. Navigate to the folder that `knock-cmake` is installed in
+3. If `apt` is your OS's package manager, then you may simply run `sudo python3 build.py` to build and install knock-cmake (this will take some time) 
+    - if you are not using `apt`, then to go to [Dependencies](#dependencies) and install those manually using your package manager of choice, then run `python3 build.py` as normal
+    - the error messages will provide you enough details to resolve any problems with installation, if not, create an [issue](https://github.com/Alvin-He/knock-cmake/issues/new)
+    - if for some reason python3 can't be used, open `build.py`, go to the end of the file, and follow instructions there. 
+4. `build.py` will generate the knock binary in `<knock-cmake download folder>/knock`. `cd`/navigate to that folder.
+5. Then run `./knock ./path/to/book.acsm` to perform the conversion.
+6. To clean up, move the knock binary to some other location, ex: your home directory or `~/`. ***MAKE SURE YOU HAVE MOVED THE KNOCK BINARY***; then run `sudo rm -r knock-cmake` to remove all the build artifacts. 
+7. Optional: move the knock binary to `/usr/local/bin` if you want to be able to run knock from anywhere.
 
 ## Dependencies
 
-There are no userspace runtime dependencies.
+Knock-cmake requires `libssl-dev, libcurl4-openssl-dev, zlib1g-dev, git, cmake, build-essential`(gcc, g++, etc.) in order to be built.
 
-## Verified Book Sources
+The then compiled binary needs libcurl, libopenssl and zlib as run time dependencies if you are planning to deploy it somewhere.
 
-Knock should work on any ACSM file, but it has been specifically verified to work on ACSM files purchased from [eBooks.com](https://www.ebooks.com/en-us/), [Kobo](https://www.kobo.com/us/en), and [Google Play](https://play.google.com/store/books?hl=en).
-
-Before buying your ebook, check if it is available for free on [Project Gutenberg](https://gutenberg.org/).
+**NOTE: the version of knock published by the [upstream knock repository](https://github.com/BentonEdmondson/knock/) will run with out these dependencies, but this version of knock built by knock-cmake will NOT!**
 
 ## Contributing
 
-Install [Nix](https://github.com/NixOS/nix) if you don't have it. Enable [flakes](https://nixos.wiki/wiki/Flakes) if you haven't.
+If you have anything to add or want to optimize any of my cmake scripts, feel free to do so and open a pull request. 
 
-### Building
-
-```
-nix build
-```
-
-### Updating
-
-```
-nix flake update
-```
-
-### Testing
-
-```
-nix run .#tests -- ./tests/workspace
-```
-
-Test books can be found [here](https://www.adobe.com/solutions/ebook/digital-editions/sample-ebook-library.html).
-
-### Formatting
-
-```
-nix run .#formatter
-```
-
-## The Name
-
-The name comes from the [D&D 5e spell](https://roll20.net/compendium/dnd5e/Knock#content) for freeing locked items:
-
-> ### Knock
-> *2nd level transmutation*\
-> **Casting Time**: 1 action\
-> **Range**: 60 feet\
-> **Components**: V\
-> **Duration**: Instantaneous\
-> **Classes**: Bard, Sorcerer, Wizard\
-> Choose an object that you can see within range. The object can be a door, a box, a chest, a set of manacles, a padlock, or another object that contains a mundane or magical means that prevents access. A target that is held shut by a mundane lock or that is stuck or barred becomes unlocked, unstuck, or unbarred. If the object has multiple locks, only one of them is unlocked. If you choose a target that is held shut with arcane lock, that spell is suppressed for 10 minutes, during which time the target can be opened and shut normally. When you cast the spell, a loud knock, audible from as far away as 300 feet, emanates from the target object.
+There are no particular formatting guides, just if your code is not self-explanatory, add comments.
 
 ## License
 
-This software is licensed under GPLv3. The linked libraries have various licenses.
+This repository is licensed under GPLv3. Knock is also licensed under GPLv3. The linked libraries have various licenses.
+
+## Motivation
+Knock have always been my go to converter when I need to convert acsm ebook files to epub for easier reading and portability. Knock is great at this, but it is very inconvenient to have to start my linux machine every time I need to convert an ebook (My linux laptop isn't my main computer). Due to my unmatched laziness, I decided to make a web interface for knock so I don't have to always bother my self. However, the upstream knock repo only published a x86-64 kernel and wouldn't you know it, most web server are arm64.... :(. Soooooooo, why not make some cmake build files for knock. Wouldn't be too hard. Right? 
+
+NO. I proceeded to take 4 days of my life making these for knock and the library it uses, [libgourou](https://forge.soutade.fr/soutade/libgourou) (also had to make libgourou's dependency [uPDFParser](https://forge.soutade.fr/soutade/uPDFParser) a cmake script too) (These 2 are very good libraries made by [soutade](https://forge.soutade.fr/soutade/), check them out!). Anyways, now that the CMake scripts exist, I will finally be able to make that web interface. I know there are web acsm to epub converters that exist already, but the ones I can find all seem broken. So when ever I finishes, I guess I will update here. 
+
+I'll try my best to keep up with the upstream repo's updates. If you need an update before I update this repo for some reason, then just change the tags and commit hashes in get_git_repo calls in build.py for newer ones.  
+
+If you need cmake scripts for libgourou or cmake scripts for uPDFParser, you can just download the scripts in /config. They should work standalone. 
+
