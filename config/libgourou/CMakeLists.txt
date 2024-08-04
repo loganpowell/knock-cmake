@@ -35,9 +35,8 @@ if(BUILD_STATIC)
     add_library(libgourou STATIC ${libgourou_SOURCES})
     add_library(libgourou_utils STATIC ${utilsCommon_SOURCES})
     
-    set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) # force openssl static link
-    set(CURL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) #force curl static link
-    target_link_options(libgourou_utils PUBLIC "-static") #use the static flag instead of ZLIB_USE_STATIC_LIBS because the 3.24 requirement is a bit high
+    target_link_options(libgourou_utils PUBLIC "-static")
+    CMAKE_FIND_LIBRARY_SUFFIXES = ".a"
 
 elseif(BUILD_SHARED)
     add_library(libgourou SHARED ${libgourou_SOURCES})
