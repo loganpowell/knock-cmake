@@ -1,10 +1,12 @@
 .vscode
 
+#ignore install directory
+knock
+
+# ignore build artifacts
 ~*
 ~build
 ~checkout
-# ignore all downloaded libs
-lib/*
 
 #ignore python cache
 __pycache__

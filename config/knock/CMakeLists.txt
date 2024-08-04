@@ -18,5 +18,5 @@ target_link_libraries(knock
     PUBLIC libgourou_utils
 )
 target_compile_definitions(knock
-    PUBLIC KNOCK_VERSION="${CMAKE_PROJECT_VERSION}"
+    PUBLIC KNOCK_VERSION="${KNOCK_VERSION}"
 )
