@@ -14,6 +14,7 @@ from pathlib import Path
 SOURCE_DIR = Path(__file__).resolve().parent
 BUILD_DIR = f"{SOURCE_DIR}/~build"
 CHECKOUT_DIR = f"{SOURCE_DIR}/~checkout"
+INSTALL_DIR = f"{SOURCE_DIR}/knock"
 libgourou_DIR = f"{CHECKOUT_DIR}/libgourou"
 updfparser_DIR = f"{CHECKOUT_DIR}/uPDFParser"
 knock_DIR = f"{CHECKOUT_DIR}/knock"
@@ -96,4 +97,4 @@ if __name__ == "__main__":
     run(["cmake", "--build", BUILD_DIR, "--config", "Release", "-j", str(os.cpu_count())], cwd=SOURCE_DIR)
     run(["cmake", "--install", BUILD_DIR], cwd=SOURCE_DIR)
     
-    print(f"build finished, the knock binary is located in: {SOURCE_DIR}/knock")
+    print(f"build finished, the knock binary is located in: {INSTALL_DIR}")
