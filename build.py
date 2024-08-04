@@ -1,28 +1,24 @@
 #! python3
 
-import sys
+#######################################################################################################
+# GO TO THE END OF THIS FILE if python3 is not available, you will have to build using shell commands #
+#######################################################################################################
+
 import os
 import shutil
 import subprocess
 from subprocess import run
-import pathlib
 from pathlib import Path
 
-# if __name__ != "__main__":
-#     raise "This is a script, not a module!"
-
+# default build config directories
 SOURCE_DIR = Path(__file__).resolve().parent
 BUILD_DIR = f"{SOURCE_DIR}/~build"
 CHECKOUT_DIR = f"{SOURCE_DIR}/~checkout"
-libgourou_dir = f"{CHECKOUT_DIR}/libgourou"
-updfparser_dir = f"{CHECKOUT_DIR}/uPDFParser"
-knock_dir = f"{CHECKOUT_DIR}/knock"
+libgourou_DIR = f"{CHECKOUT_DIR}/libgourou"
+updfparser_DIR = f"{CHECKOUT_DIR}/uPDFParser"
+knock_DIR = f"{CHECKOUT_DIR}/knock"
 
-# def run(*_args,**_namedArgs) -> subprocess.CompletedProcess[bytes]:
-#     _namedArgs.setdefault("stderr", subprocess.PIPE)
-#     _namedArgs.setdefault("stdout", subprocess.PIPE)
-#     return subprocess.run(*_args, **_namedArgs)
-
+# helper functions 
 def check_binary_dependency(name: str, critical=True) -> bool:
     try:
         proc = run("git", stdout=subprocess.PIPE, stderr=subprocess.PIPE) # pipe to silence the help messages
@@ -69,27 +65,31 @@ def autoget_apt_pkg():
         return
     run(["apt", "install", "build-essential", "git", "cmake", "libssl-dev", "libcurl4-openssl-dev", "zlib1g-dev", "-y"])
 
+###########
+# INSTALL #
+###########
 # This can be done through a shell if python is not available, just follow the steps and use equivalent commands in shell
 if __name__ == "__main__":
     #clean repo of old build artifacts
     clean()
 
-    # install package manager dependencies if apt is available 
+    # install package manager dependencies if apt is available and script have root perms
+    # packages needed: build-essential, git, cmake, libssl-dev, libcurl4-openssl-dev, zlib1g-dev
     autoget_apt_pkg()
 
-    # check if build tools 
+    # check if build tools exist 
     check_binary_dependency("git")
     check_binary_dependency("cmake")
 
     # grab dependencies that needs to be grabbed before cmake
-    get_git_repo("https://forge.soutade.fr/soutade/libgourou.git", libgourou_dir , "master", "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
-    get_git_repo("https://forge.soutade.fr/soutade/uPDFParser", updfparser_dir , "master", "6060d123441a06df699eb275ae5ffdd50409b8f3")
-    get_git_repo("https://github.com/BentonEdmondson/knock", knock_dir, "79", "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
+    get_git_repo("https://forge.soutade.fr/soutade/libgourou.git", libgourou_DIR , "master", "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
+    get_git_repo("https://forge.soutade.fr/soutade/uPDFParser", updfparser_DIR , "master", "6060d123441a06df699eb275ae5ffdd50409b8f3")
+    get_git_repo("https://github.com/BentonEdmondson/knock", knock_DIR, "79", "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
 
     # copy the needed build configuration files into those dependencies 
-    cp(f"{SOURCE_DIR}/config/libgourou/", libgourou_dir, True)
-    cp(f"{SOURCE_DIR}/config/uPDFParser", updfparser_dir, True)
-    cp(f"{SOURCE_DIR}/config/knock", knock_dir, True)
+    cp(f"{SOURCE_DIR}/config/libgourou/", libgourou_DIR, True)
+    cp(f"{SOURCE_DIR}/config/uPDFParser", updfparser_DIR, True)
+    cp(f"{SOURCE_DIR}/config/knock", knock_DIR, True)
     
     # run cmake configure and build commands 
     run(["cmake", "-S", ".", "-B", BUILD_DIR], cwd=SOURCE_DIR)
