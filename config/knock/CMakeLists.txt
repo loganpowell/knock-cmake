@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.24)
 
 set(KNOCK_VERSION "0.0.0" CACHE STRING "Set Version of knock")
 project(knock VERSION ${KNOCK_VERSION} LANGUAGES C CXX)

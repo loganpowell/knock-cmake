@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.24)
 
 project(knock-cmake VERSION 0.0.1 LANGUAGES C CXX)
 
@@ -16,7 +16,6 @@ set(BUILD_STATIC ON CACHE BOOL ${HELP} FORCE)
 set(BUILD_SHARED OFF CACHE BOOL ${HELP} FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL ${HELP} FORCE)
 set(BUILD_STATIC_LIBS ON CACHE BOOL ${HELP} FORCE)
-set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL ${HELP} FORCE) # force openssl static link
 set(CMAKE_EXE_LINKER_FLAGS "-static") # enforce linking static on pre-built libraries
 
 # this script is set up to track version 79 of knock

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15.0)
+cmake_minimum_required(VERSION 3.24.0)
 
 file(READ "include/libgourou.h" file_contain_version)
 string(REGEX MATCH "\#define[ \t\r\n]*LIBGOUROU_VERSION[ \t\r\n]*\"(.*)\"" _ file_contain_version)
@@ -34,6 +34,11 @@ set(utilsCommon_SOURCES utils/drmprocessorclientimpl.cpp utils/utils_common.cpp)
 if(BUILD_STATIC)
     add_library(libgourou STATIC ${libgourou_SOURCES})
     add_library(libgourou_utils STATIC ${utilsCommon_SOURCES})
+    
+    set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) # force openssl static link
+    set(CURL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) #force curl static link
+    set(ZLIB_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) #force zlib static link)
+
 elseif(BUILD_SHARED)
     add_library(libgourou SHARED ${libgourou_SOURCES})
     add_library(libgourou_utils SHARED ${utilsCommon_SOURCES})
