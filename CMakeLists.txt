@@ -19,5 +19,5 @@ set(BUILD_STATIC_LIBS ON CACHE BOOL ${HELP} FORCE)
 set(KNOCK_VERSION "3.0.79" CACHE STRING ${HELP} FORCE)
 
 # this will add the knock target to the build. No EXCLUDE_FROM_ALL so the knock binary will be included by default 
-add_subdirectory(${CMAKE_SOURCE_DIR}/~checkout/knock)
+add_subdirectory(${CMAKE_SOURCE_DIR}/~checkout/knock ${CMAKE_BINARY_DIR})
 install(TARGETS knock DESTINATION ${CMAKE_INSTALL_PREFIX})
