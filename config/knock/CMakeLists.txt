@@ -7,7 +7,7 @@ if(NOT DEFINED libgourou_DIR)
     message(FATAL_ERROR "knock depends on libgourou, please define libgourou_DIR so cmake can find it.")
 endif()
 
-add_subdirectory(${libgourou_DIR} EXCLUDE_FROM_ALL)
+add_subdirectory(${libgourou_DIR} ${CMAKE_BINARY_DIR}/libgourou EXCLUDE_FROM_ALL)
 
 add_executable(knock src/knock.cpp)
 target_include_directories(knock 
