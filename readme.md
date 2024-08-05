@@ -14,7 +14,6 @@ NOTE: For x86-64 users, you may simply go to the [knock repository's release pag
 
 1. Get to [releases](https://github.com/Alvin-He/knock-cmake/knock/releases) to get the latest release.
     - *if older knock releases is needed, this repository's release version numbers should match up with the [upstream Knock repository's release page.](https://github.com/BentonEdmondson/knock/releases)*
-    - convenient git clone command to get the latest release: `git clone https://github.com/Alvin-He/knock-cmake -b latest`
 2. Navigate to the folder that `knock-cmake` is installed in
 3. If `apt` is your OS's package manager, then you may simply run `sudo python3 build.py` to build and install knock-cmake (this will take some time) 
     - if you are not using `apt`, then to go to [Dependencies](#dependencies) and install those manually using your package manager of choice, then run `python3 build.py` as normal
