@@ -8,6 +8,8 @@ Knock can Convert ACSM files to PDF/EPUBs with one command on Linux.
 
 This is a special build script for knock. You can find the original knock repository here: [https://github.com/BentonEdmondson/knock](https://github.com/BentonEdmondson/knock). Special thanks to Benton Edmondson and all the other knock contributors.
 
+**As of Febebury 8th, 2025. The upstream knock repo is currently offline, the build scripts provided here is configured to use a [fork of knock](https://github.com/Alvin-He/knock-cmake/tree/knock-base-release-79).**
+
 ## Installation
 
 NOTE: For x86-64 users, you may simply go to the [knock repository's release page](https://github.com/BentonEdmondson/knock/releases) to download a binary. The binary published by the upstream knock repository does not require any of the runtime dependencies here.

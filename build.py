@@ -93,7 +93,8 @@ if __name__ == "__main__":
     #############<-repo url---------------------------------------><-output dir-------><-tag-------><-git hash------------------------------->
     get_git_repo("https://forge.soutade.fr/soutade/libgourou.git",  libgourou_DIR ,     "master",   "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7")
     get_git_repo("https://forge.soutade.fr/soutade/uPDFParser",     updfparser_DIR ,    "master",   "6060d123441a06df699eb275ae5ffdd50409b8f3")
-    get_git_repo("https://github.com/BentonEdmondson/knock",        knock_DIR,          "79",       "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
+    #get_git_repo("https://github.com/BentonEdmondson/knock",        knock_DIR,          "79",       "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
+    get_git_repo("https://github.com/Alvin-He/knock-cmake",        knock_DIR,          "knock-base-release-79",       "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
 
     # copy the needed build configuration files into those dependencies 
     # move each of the CMakeLists.txt and any other files in ./config/<repo name>/ into each of their corresponding folders in ~checkout
