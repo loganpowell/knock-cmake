@@ -1,12 +1,12 @@
 # Knock-CMake
 
-Knock-CMake is a project that allows the compilation of Knock using CMake on any *unix OS with various processor architectures. 
+Knock-CMake is a project that allows the compilation of Knock using CMake on any Lunix OS (or Windows WSL) with various processor architectures. 
 
 Knock can Convert ACSM files to PDF/EPUBs with one command on Linux.
 
 *This software does not utilize Adobe Digital Editions nor Wine. It is completely free and open-source software written natively for Linux.*
 
-This is a special build script for knock. You can find the original knock repository here: [https://github.com/BentonEdmondson/knock](https://github.com/BentonEdmondson/knock). Special thanks to Benton Edmondson and all the other knock contributors.
+This is a special build script for knock utilizing CMake instead of Nix for better compability. You can find the original knock repository here: [https://github.com/BentonEdmondson/knock](https://github.com/BentonEdmondson/knock). Special thanks to Benton Edmondson and all the other knock contributors.
 
 **As of Febebury 8th, 2025. The upstream knock repo is currently offline, the build scripts provided here is configured to use a [fork of knock](https://github.com/Alvin-He/knock-cmake/tree/knock-base-release-79).**
 
