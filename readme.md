@@ -1,6 +1,6 @@
 # Knock-CMake
 
-Knock-CMake is a project that allows the compilation of Knock using CMake on any Lunix OS (or Windows WSL) with various processor architectures. 
+Knock-CMake is a project that allows the compilation of Knock using CMake on any Linux OS (or Windows WSL) with various processor architectures. 
 
 Knock can Convert ACSM files to PDF/EPUBs with one command on Linux.
 
