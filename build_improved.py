@@ -50,7 +50,7 @@ def check_binary_dependency(name: str, critical=True) -> bool:
 def extract_source_archive(archive_name: str, outputDir: Path) -> bool:
     """Extract source code from a tar.gz archive instead of git cloning"""
     outputDir = Path(outputDir)
-    
+
     # Check if directory already exists and has content
     if outputDir.exists() and any(outputDir.iterdir()):
         print(f"Directory {outputDir} already exists with content, skipping extraction")
@@ -58,34 +58,36 @@ def extract_source_archive(archive_name: str, outputDir: Path) -> bool:
             print(f"✓ Found CMakeLists.txt in {outputDir}, source appears valid")
             return True
         else:
-            print(f"⚠️ Directory exists but CMakeLists.txt not found, proceeding with extraction")
-    
+            print(
+                f"⚠️ Directory exists but CMakeLists.txt not found, proceeding with extraction"
+            )
+
     # Path to the source archive
     source_archive = SOURCE_DIR / "assets" / "sources" / f"{archive_name}.tar.gz"
-    
+
     if not source_archive.exists():
         print(f"ERROR: Source archive not found: {source_archive}")
         return False
-    
+
     # Create parent directory if it doesn't exist
     outputDir.parent.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"Extracting {archive_name} from archive: {source_archive}")
     print(f"Target directory: {outputDir}")
-    
+
     # Extract the archive
     cmd = ["tar", "-xzf", str(source_archive), "-C", str(outputDir.parent)]
     run_cmd(cmd)
-    
+
     # Verify extraction worked
     if not outputDir.exists() or not any(outputDir.iterdir()):
         print(f"ERROR: Extraction failed - {outputDir} is empty or doesn't exist")
         return False
-    
+
     if not (outputDir / "CMakeLists.txt").exists():
         print(f"ERROR: CMakeLists.txt not found after extraction in {outputDir}")
         return False
-    
+
     print(f"✓ Successfully extracted {archive_name}")
     return True
 
@@ -98,7 +100,7 @@ def get_git_repo(
 ) -> bool:
     """Legacy function - now uses source archives instead of git"""
     outputDir = Path(outputDir)
-    
+
     # Determine which archive to use based on the repo path
     if "libgourou" in repoPath:
         return extract_source_archive("libgourou", outputDir)
