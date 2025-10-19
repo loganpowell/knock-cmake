@@ -1,6 +1,9 @@
 .vscode
 
-# Environment files (may contain sensitive data)
+#ignore build artifacts
+~*
+~build
+~checkoutvironment files (may contain sensitive data)
 .env
 tests/.env
 

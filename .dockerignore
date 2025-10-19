@@ -1,0 +1,13 @@
+# Docker ignore file - less restrictive than .gitignore for build purposes
+.vscode
+.git
+tests/.env
+build-output
+~build
+__pycache__
+.venv/
+*.pyc
+
+# Keep ~checkout directory and its contents for the build
+!~checkout/
+!~checkout/**

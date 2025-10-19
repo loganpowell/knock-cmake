@@ -50,6 +50,14 @@ target_include_directories(libgourou PUBLIC ${updfparser_DIR}/include)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
 target_include_directories(libgourou_utils PUBLIC ${OPENSSL_INCLUDE_DIR})
 
+# Add OpenSSL compatibility fixes for API changes between versions
+target_compile_definitions(libgourou_utils PRIVATE 
+    EVP_PKEY_CTX_set1_rsa_keygen_pubexp=EVP_PKEY_CTX_set_rsa_keygen_pubexp
+    EVP_PKEY_get_size=EVP_PKEY_size)
+target_compile_definitions(libgourou PRIVATE 
+    EVP_PKEY_CTX_set1_rsa_keygen_pubexp=EVP_PKEY_CTX_set_rsa_keygen_pubexp
+    EVP_PKEY_get_size=EVP_PKEY_size)
+
 find_package(CURL REQUIRED)
 target_include_directories(libgourou_utils PUBLIC ${CURL_INCLUDE_DIRS})
 
