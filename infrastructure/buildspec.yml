@@ -1,0 +1,85 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo "Starting pre-build phase"
+      - echo "ECR Repository URI is $ECR_REPOSITORY_URI"
+      - echo "AWS Region is $AWS_DEFAULT_REGION"
+      - echo "Checking network connectivity"
+      - ping -c 3 google.com || echo "No internet connectivity"
+      - echo "Listing directory contents"
+      - ls -la
+      - echo "Available memory and disk space"
+      - free -h && df -h
+      - echo "Checking AWS credentials"
+      - aws sts get-caller-identity
+      - echo "Extracting ECR region from URI"
+      - ECR_REGION=$(echo $ECR_REPOSITORY_URI | cut -d. -f4)
+      - echo "ECR Region is $ECR_REGION, Default Region is $AWS_DEFAULT_REGION"
+      - echo "Getting ECR login using ECR region"
+      - aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+      - echo "Successfully logged in to ECR"
+  build:
+    commands:
+      - echo "Build started on $(date)"
+      - echo "Building the Lambda Docker image"
+      - echo "Current directory contents"
+      - ls -la
+      - echo "Looking for Dockerfile"
+      - find . -name "Dockerfile*" -type f
+      - echo "Verifying Dockerfile exists"
+      - if [ -f "infrastructure/lambda/Dockerfile" ]; then cat infrastructure/lambda/Dockerfile | head -10; else echo "ERROR - Dockerfile not found at infrastructure/lambda/Dockerfile"; exit 1; fi
+      - echo "Checking if build.py exists"
+      - if [ -f "build.py" ]; then echo "build.py found"; else echo "ERROR - build.py not found"; exit 1; fi
+      - echo "Starting Docker build with target URI $ECR_REPOSITORY_URI:latest"
+      - docker build -f infrastructure/lambda/Dockerfile -t $ECR_REPOSITORY_URI:latest . --no-cache --progress=plain
+      - BUILD_EXIT_CODE=$?
+      - echo "Docker build exit code was $BUILD_EXIT_CODE"
+      - if [ $BUILD_EXIT_CODE -ne 0 ]; then echo "ERROR - Docker build failed with exit code $BUILD_EXIT_CODE"; exit $BUILD_EXIT_CODE; fi
+      - echo "Listing all Docker images after build"
+      - docker images
+      - echo "Specifically checking for our image"
+      - docker images | grep $ECR_REPOSITORY_URI || (echo "ERROR - Image not found after build" && exit 1)
+      - echo "Checking image with explicit tag"
+      - docker images $ECR_REPOSITORY_URI:latest || (echo "ERROR - Image with latest tag not found" && exit 1)
+      - echo "Image built and tagged successfully"
+  post_build:
+    commands:
+      - echo "Build completed on $(date)"
+      - echo "Verifying image exists before push"
+      - docker images $ECR_REPOSITORY_URI:latest
+      - echo "Pushing the Docker image"
+      - docker push $ECR_REPOSITORY_URI:latest
+      - echo "Image pushed successfully"
+      - echo "Getting image digest after push"
+      - echo "Waiting 10 seconds for ECR to update image metadata..."
+      - sleep 10
+      - REPO_NAME=$(echo $ECR_REPOSITORY_URI | cut -d'/' -f2)
+      - echo "Repository name:" $REPO_NAME
+      - echo "Attempting to get image digest from ECR..."
+      - |
+        # Use a subshell to handle errors without exiting main script
+        (
+          IMAGE_DIGEST=$(aws ecr describe-images --repository-name $REPO_NAME --region $AWS_DEFAULT_REGION --image-ids imageTag=latest --query "imageDetails[0].imageDigest" --output text 2>&1)
+          DESCRIBE_EXIT_CODE=$?
+          echo "ECR describe-images exit code: $DESCRIBE_EXIT_CODE"
+          
+          if [ $DESCRIBE_EXIT_CODE -eq 0 ] && [ "$IMAGE_DIGEST" != "None" ] && [ -n "$IMAGE_DIGEST" ]; then
+            echo "✅ Successfully retrieved image digest: $IMAGE_DIGEST"
+            IMAGE_URI_WITH_DIGEST="$ECR_REPOSITORY_URI@$IMAGE_DIGEST"
+            echo "Full image URI with digest: $IMAGE_URI_WITH_DIGEST"
+            echo "$IMAGE_URI_WITH_DIGEST" > /tmp/image_uri_digest.txt
+            echo "✅ Image URI with digest saved successfully"
+          else
+            echo "⚠️ Failed to get image digest (exit code: $DESCRIBE_EXIT_CODE)"
+            echo "Error output: $IMAGE_DIGEST"
+            echo "🔄 Falling back to latest tag..."
+            FALLBACK_URI="$ECR_REPOSITORY_URI:latest"
+            echo "Fallback image URI: $FALLBACK_URI"
+            echo "$FALLBACK_URI" > /tmp/image_uri_digest.txt
+            echo "⚠️ Using fallback URI - Lambda may not update automatically on next build"
+          fi
+          echo "Image URI written to /tmp/image_uri_digest.txt"
+        ) || true
+      - echo "POST_BUILD phase completed successfully with fallback handling"
+      - echo "Image URI with digest saved to /tmp/image_uri_digest.txt"

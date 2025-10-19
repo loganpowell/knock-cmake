@@ -15,17 +15,17 @@ from typing import Optional
 SOURCE_DIR = Path(__file__).resolve().parent
 BUILD_DIR = Path(f"{SOURCE_DIR}/~build")
 CHECKOUT_DIR = Path(f"{SOURCE_DIR}/~checkout")
-INSTALL_DIR = Path(f"{SOURCE_DIR}/knock")
+INSTALL_DIR = Path(f"{SOURCE_DIR}/build-output")
 libgourou_DIR = Path(f"{CHECKOUT_DIR}/libgourou")
 updfparser_DIR = Path(f"{CHECKOUT_DIR}/uPDFParser")
-knock_DIR = Path(f"{CHECKOUT_DIR}/knock")
+knock_DIR = Path(f"{SOURCE_DIR}/knock")
 
 
 # helper functions
 def check_binary_dependency(name: str, critical=True) -> bool:
     try:
         proc = run(
-            "git", stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            name, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )  # pipe to silence the help messages
     except FileNotFoundError:
         if not critical:
@@ -85,7 +85,7 @@ def clean():
 
 
 def autoget_apt_pkg():
-    if (not check_binary_dependency("apt")) or (not os.geteuid() == 0):
+    if (not check_binary_dependency("apt", critical=False)) or (not os.geteuid() == 0):
         print(
             "Auto pkg get not available; Please ensure the following libraries are installed: build-essential, git, cmake, libssl-dev, libcurl4-openssl-dev, zlib1g-dev"
         )
@@ -110,16 +110,27 @@ def autoget_apt_pkg():
 ###########
 # This can be done through a shell if python is not available, just follow the steps and use equivalent commands in shell
 if __name__ == "__main__":
+    print("Starting build process...")
+
     # clean repo of old build artifacts
+    print("Cleaning old build artifacts...")
     clean()
+    print("✓ Clean completed")
 
     # install package manager dependencies if apt is available and script have root perms
     # packages needed: build-essential, git, cmake, libssl-dev, libcurl4-openssl-dev, zlib1g-dev
+    print("Checking for apt dependencies...")
     autoget_apt_pkg()
+    print("✓ Apt check completed")
 
     # check if build tools exist
+    print("Checking binary dependencies...")
+    print("Checking for git...")
     check_binary_dependency("git")
+    print("✓ git found")
+    print("Checking for cmake...")
     check_binary_dependency("cmake")
+    print("✓ cmake found")
 
     # grab dependencies that needs to be grabbed before cmake
     # can be manually done by running the following commands:
@@ -129,35 +140,42 @@ if __name__ == "__main__":
     # then run `git reset --hard <commit hash>` in each of the repos with their appropriate commit hashes listed here
 
     #############<-repo url---------------------------------------><-output dir-------><-tag-------><-git hash------------------------------->
+    print("Cloning libgourou repository...")
     get_git_repo(
         "https://forge.soutade.fr/soutade/libgourou.git",
         libgourou_DIR,
         "master",
         "81faf1f9bef4d27d8659f2f16b9c65df227ee3d7",
     )
+    print("✓ libgourou cloned")
+
+    print("Cloning uPDFParser repository...")
     get_git_repo(
         "https://forge.soutade.fr/soutade/uPDFParser",
         updfparser_DIR,
         "master",
         "6060d123441a06df699eb275ae5ffdd50409b8f3",
     )
-    # get_git_repo("https://github.com/BentonEdmondson/knock",        knock_DIR,          "79",       "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262")
-    get_git_repo(
-        "https://github.com/loganpowell/knock-cmake",
-        knock_DIR,
-        "knock-base-release-79",
-        "0aa4005fd4f2ee1b41c20643017c8f0a2bdf6262",
-    )
+    print("✓ uPDFParser cloned")
+
+    # knock is now local in the knock/ directory, no need to clone
 
     # copy the needed build configuration files into those dependencies
     # move each of the CMakeLists.txt and any other files in ./config/<repo name>/ into each of their corresponding folders in ~checkout
+    print("Copying configuration files...")
     cp(Path(f"{SOURCE_DIR}/config/libgourou/"), libgourou_DIR, True)
     cp(Path(f"{SOURCE_DIR}/config/uPDFParser"), updfparser_DIR, True)
-    cp(Path(f"{SOURCE_DIR}/config/knock"), knock_DIR, True)
+    print("✓ Configuration files copied")
+
+    # knock directory already has its CMakeLists.txt, no need to copy
 
     # run cmake configure and build commands
     # literally copy all the arguments on each line into a shell and run them
+    print("Running cmake configure...")
     run(["cmake", "-S", ".", "-B", BUILD_DIR], cwd=SOURCE_DIR)
+    print("✓ cmake configure completed")
+
+    print("Running cmake build...")
     run(
         [
             "cmake",
@@ -170,6 +188,10 @@ if __name__ == "__main__":
         ],
         cwd=SOURCE_DIR,
     )
+    print("✓ cmake build completed")
+
+    print("Running cmake install...")
     run(["cmake", "--install", BUILD_DIR], cwd=SOURCE_DIR)
+    print("✓ cmake install completed")
 
     print(f"build finished, the knock binary is located in: {INSTALL_DIR}")

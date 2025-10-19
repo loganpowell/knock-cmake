@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "knock-cmake"
+version = "0.1.0"
+description = "Knock Lambda Infrastructure with Pulumi"
+requires-python = ">=3.11"
+dependencies = [
+    "pulumi>=3.0.0,<4.0.0",
+    "pulumi-aws>=7.0.0,<8.0.0",
+    "pulumi-command>=1.0.0,<2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0", 
+    "ruff>=0.1.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.pyright]
+include = ["infrastructure"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "~build", "~checkout", "build-output"]
+pythonVersion = "3.11"
+pythonPlatform = "All"
+extraPaths = ["infrastructure"]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["infrastructure/"]
