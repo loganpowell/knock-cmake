@@ -132,7 +132,7 @@ test_health_check() {
     echo "Testing basic Lambda connectivity with ACSM asset..."
     
     # Prefer using the bundled ACSM asset for a realistic request
-    local acsm_file="$ASSETS_DIR/Princes_of_the_Yen-epub.acsm"
+    local acsm_file="$ASSETS_DIR/The_Chemical_Muse-epub.acsm"
     local payload
     if [ -f "$acsm_file" ]; then
         echo "📂 Reading ACSM file: $acsm_file"
@@ -204,7 +204,7 @@ test_missing_parameters() {
 test_acsm_content() {
     echo "Testing ACSM content upload..."
     
-    local acsm_file="$ASSETS_DIR/Princes_of_the_Yen-epub.acsm"
+    local acsm_file="$ASSETS_DIR/The_Chemical_Muse-epub.acsm"
     
     if [ ! -f "$acsm_file" ]; then
         echo "✗ ACSM test file not found: $acsm_file"

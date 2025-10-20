@@ -490,11 +490,19 @@ def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str) -> Dict[str
             if file_path.suffix.lower() in [".pdf", ".epub"] and file_path.is_file():
                 key = f"converted/{file_path.name}"
                 s3.upload_file(str(file_path), output_bucket, key)
+                
+                # Generate presigned URL (valid for 1 hour)
+                presigned_url = s3.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': output_bucket, 'Key': key},
+                    ExpiresIn=3600  # 1 hour
+                )
+                
                 output_files.append(
                     {
                         "filename": file_path.name,
                         "s3_key": key,
-                        "s3_url": f"https://{output_bucket}.s3.amazonaws.com/{key}",
+                        "download_url": presigned_url,
                         "size_bytes": file_path.stat().st_size,
                     }
                 )

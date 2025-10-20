@@ -30,7 +30,7 @@ echo "Function URL: $FUNCTION_URL"
 test_concurrent_requests() {
     echo -e "\n${BLUE}Testing concurrent requests...${NC}"
     
-    local acsm_file="$PROJECT_ROOT/assets/Princes_of_the_Yen-epub.acsm"
+    local acsm_file="$PROJECT_ROOT/assets/The_Chemical_Muse-epub.acsm"
     if [ ! -f "$acsm_file" ]; then
         echo "❌ ACSM file not found"
         return 1

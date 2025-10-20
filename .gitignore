@@ -45,3 +45,4 @@ wheels/
 # uv.lock
 
 .env
+*.acsm

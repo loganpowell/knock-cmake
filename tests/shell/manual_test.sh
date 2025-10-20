@@ -130,7 +130,7 @@ case "${1:-}" in
         test_custom_content "$2"
         ;;
     "asset")
-        asset_file="$PROJECT_ROOT/assets/Princes_of_the_Yen-epub.acsm"
+        asset_file="$PROJECT_ROOT/assets/The_Chemical_Muse-epub.acsm"
         if [ -f "$asset_file" ]; then
             test_acsm_file "$asset_file"
         else
