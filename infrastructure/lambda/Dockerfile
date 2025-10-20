@@ -1,75 +1,119 @@
-# Use the official AWS Lambda Python runtime as the base image (Amazon Linux 2023)
-FROM public.ecr.aws/lambda/python:3.11-x86_64
+# Stage 1: Build knock binary using Debian
+# Using libgourou v0.8.7 which requires OpenSSL 3.x support
+FROM debian:bookworm-slim AS builder
 
-# Install system dependencies needed for the Knock build  
-# Install system dependencies needed for the Knock build
-# Use openssl11-devel to avoid conflicts with pre-installed openssl-snapsafe-libs  
-RUN yum update -y && \
-    yum groupinstall -y "Development Tools" && \
-    yum install -y --skip-broken \
-        git \
-        openssl11-devel \
-        libcurl-devel \
-        zlib-devel \
-        python3-pip \
-        wget \
-        tar \
-        pkgconfig
+# Install build dependencies including static libraries
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libkrb5-dev \
+    zlib1g-dev \
+    pkg-config \
+    python3 \
+    wget \
+    ca-certificates \
+    file \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install a newer version of CMake (the yum version is too old)
-RUN cd /tmp && \
-    curl -L -o cmake-3.28.0-linux-x86_64.tar.gz https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0-linux-x86_64.tar.gz && \
-    tar -xzf cmake-3.28.0-linux-x86_64.tar.gz && \
-    cp -r cmake-3.28.0-linux-x86_64/* /usr/local/ && \
-    rm -rf cmake-3.28.0-linux-x86_64* && \
-    ln -sf /usr/local/bin/cmake /usr/bin/cmake
+# Set working directory for build
+WORKDIR /build
 
-# Set the working directory
+# Copy project files - include deps/ directory with local sources
+COPY deps/ /build/deps/
+COPY knock/ /build/knock/
+COPY CMakeLists.txt /build/
+COPY build_container.py /build/
+
+# Build the Knock binary using simplified build script
+SHELL ["/bin/bash", "-c"]
+RUN set -o pipefail && \
+    echo "=== KNOCK CONTAINER BUILD - LOCAL SOURCES ===" && \
+    echo "Build environment:" && \
+    cmake --version && \
+    python3 --version && \
+    openssl version && \
+    echo "" && \
+    echo "=== VERIFYING SOURCE DIRECTORIES ===" && \
+    ls -la deps/ && \
+    ls -la knock/ && \
+    echo "" && \
+    echo "=== RUNNING SIMPLIFIED BUILD SCRIPT ===" && \
+    export CMAKE_BUILD_TYPE=Release && \
+    python3 -u build_container.py 2>&1 | tee /tmp/build.log; \
+    BUILD_EXIT_CODE=$?; \
+    echo "" && \
+    if [ $BUILD_EXIT_CODE -ne 0 ]; then \
+        echo "=== BUILD FAILED ===" && \
+        echo "Last 100 lines of build log:" && \
+        tail -100 /tmp/build.log && \
+        exit 1; \
+    fi && \
+    echo "=== VERIFYING BUILD OUTPUT ===" && \
+    ls -lh build-output/knock && \
+    file build-output/knock && \
+    echo "" && \
+    echo "=== CHECKING DYNAMIC DEPENDENCIES ===" && \
+    ldd build-output/knock && \
+    echo "" && \
+    echo "=== BUILD SUCCESSFUL ===" && \
+    ./build-output/knock 2>&1 | head -5 || true
+
+# Stage 2: Create Lambda runtime image using Debian to match build GLIBC
+# Using Debian Bookworm with Python 3.11 to match build environment
+FROM debian:bookworm-slim
+
+# Install Python and runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    libcurl4 \
+    libssl3 \
+    zlib1g \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up Lambda directories
+ENV LAMBDA_TASK_ROOT=/var/task
 WORKDIR ${LAMBDA_TASK_ROOT}
 
-# Copy the entire project
-COPY . ${LAMBDA_TASK_ROOT}/
+# Copy the built binary and shared libraries
+RUN mkdir -p ${LAMBDA_TASK_ROOT}/knock ${LAMBDA_TASK_ROOT}/lib
+COPY --from=builder /build/build-output/knock ${LAMBDA_TASK_ROOT}/knock/knock
+COPY --from=builder /build/build-output/adept_activate ${LAMBDA_TASK_ROOT}/knock/adept_activate
+COPY --from=builder /build/~build/libgourou/*.so* ${LAMBDA_TASK_ROOT}/lib/
+COPY --from=builder /build/~build/uPDFParser/*.so* ${LAMBDA_TASK_ROOT}/lib/
+RUN chmod +x ${LAMBDA_TASK_ROOT}/knock/knock ${LAMBDA_TASK_ROOT}/knock/adept_activate
 
+# Set LD_LIBRARY_PATH so knock can find the shared libraries
+ENV LD_LIBRARY_PATH="${LAMBDA_TASK_ROOT}/lib:${LD_LIBRARY_PATH}"
 
-
-# Build the Knock binary using the existing build script with error handling
-RUN echo "=== STARTING KNOCK BUILD PROCESS ===" && \
-    echo "Verifying cmake version:" && \
-    cmake --version && \
-    echo "Verifying build environment:" && \
-    python3 --version && \
-    command -v git && \
-    echo "Current directory: $(pwd)" && \
-    echo "Available files:" && \
-    ls -la && \
-    echo "=== RUNNING IMPROVED BUILD SCRIPT WITH STRICT ERROR HANDLING ===" && \
-    cd ${LAMBDA_TASK_ROOT} && \
-    set -e && \
-    python3 -u build_improved.py 2>&1 | tee /tmp/build.log && \
-    echo "=== BUILD.PY COMPLETED - VERIFYING OUTPUT ===" && \
-    if [ ! -d "build-output" ]; then echo "ERROR: build-output directory not created"; cat /tmp/build.log; exit 1; fi && \
-    echo "Build output directory contents:" && \
-    ls -la build-output/ && \
-    if [ ! -f "build-output/knock" ]; then echo "ERROR: knock binary not found"; ls -la build-output/; exit 1; fi && \
-    echo "Verifying knock binary:" && \
-    ls -la build-output/knock && \
-    file build-output/knock && \
-    echo "=== SETTING UP LAMBDA BINARY LOCATION ===" && \
-    mkdir -p ${LAMBDA_TASK_ROOT}/knock && \
-    cp build-output/knock ${LAMBDA_TASK_ROOT}/knock/knock && \
-    chmod +x ${LAMBDA_TASK_ROOT}/knock/knock && \
-    echo "Final binary verification:" && \
+# Verify the binary works in the Lambda environment
+RUN echo "=== VERIFYING BINARY IN LAMBDA ENVIRONMENT ===" && \
     ls -la ${LAMBDA_TASK_ROOT}/knock/ && \
+    ls -la ${LAMBDA_TASK_ROOT}/lib/ && \
     file ${LAMBDA_TASK_ROOT}/knock/knock && \
-    ${LAMBDA_TASK_ROOT}/knock/knock --help 2>/dev/null || echo "Binary exists but may need libraries" && \
-    echo "=== KNOCK BUILD PROCESS COMPLETED ==="
+    file ${LAMBDA_TASK_ROOT}/knock/adept_activate && \
+    echo "Checking shared library dependencies for knock:" && \
+    ldd ${LAMBDA_TASK_ROOT}/knock/knock && \
+    echo "Checking shared library dependencies for adept_activate:" && \
+    ldd ${LAMBDA_TASK_ROOT}/knock/adept_activate && \
+    echo "Testing knock binary:" && \
+    ${LAMBDA_TASK_ROOT}/knock/knock 2>&1 | head -5 || echo "Knock test complete (exit code: $?)" && \
+    echo "Testing adept_activate binary:" && \
+    ${LAMBDA_TASK_ROOT}/knock/adept_activate --version 2>&1 || echo "adept_activate test complete (exit code: $?)"
 
 # Copy the Lambda function code and requirements
 COPY infrastructure/lambda/handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
 COPY infrastructure/lambda/requirements.txt ${LAMBDA_TASK_ROOT}/requirements.txt
 
-# Install Python dependencies
-RUN pip install -r ${LAMBDA_TASK_ROOT}/requirements.txt
+# Install Python dependencies including Lambda Runtime Interface Client
+RUN pip3 install --break-system-packages \
+    -r ${LAMBDA_TASK_ROOT}/requirements.txt \
+    awslambdaric
 
-# Set the Lambda handler
+# Set the entrypoint to use the Lambda Runtime Interface Client
+ENTRYPOINT ["/usr/bin/python3", "-m", "awslambdaric"]
 CMD ["lambda_function.lambda_handler"]

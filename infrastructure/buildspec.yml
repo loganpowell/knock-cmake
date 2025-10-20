@@ -29,8 +29,8 @@ phases:
       - find . -name "Dockerfile*" -type f
       - echo "Verifying Dockerfile exists"
       - if [ -f "infrastructure/lambda/Dockerfile" ]; then cat infrastructure/lambda/Dockerfile | head -10; else echo "ERROR - Dockerfile not found at infrastructure/lambda/Dockerfile"; exit 1; fi
-      - echo "Checking if build.py exists"
-      - if [ -f "build.py" ]; then echo "build.py found"; else echo "ERROR - build.py not found"; exit 1; fi
+      - echo "Checking if build_container.py exists"
+      - if [ -f "build_container.py" ]; then echo "build_container.py found"; else echo "ERROR - build_container.py not found"; exit 1; fi
       - echo "Starting Docker build with target URI $ECR_REPOSITORY_URI:latest"
       - docker build -f infrastructure/lambda/Dockerfile -t $ECR_REPOSITORY_URI:latest . --no-cache --progress=plain
       - BUILD_EXIT_CODE=$?

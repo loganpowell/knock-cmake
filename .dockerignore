@@ -4,10 +4,17 @@
 tests/.env
 build-output
 ~build
+~checkout
 __pycache__
 .venv/
 *.pyc
+.DS_Store
 
-# Keep ~checkout directory and its contents for the build
-!~checkout/
-!~checkout/**
+# Infrastructure files (not needed in build container)
+infrastructure/Pulumi*
+infrastructure/__pycache__
+infrastructure/.env
+infrastructure/*.sh
+
+# Note: deps/ is included - contains local source dependencies
+# Note: assets/sources/ is included - contains source tarballs

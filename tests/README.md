@@ -62,6 +62,52 @@ The tests use ACSM files from the `assets/` directory:
 
 - `assets/Princes_of_the_Yen-epub.acsm` - Sample ACSM file for testing
 
+### ⚠️ ACSM File Expiration
+
+ACSM files are **time-limited fulfillment tokens** from Adobe/Google Books. They contain an `<expiration>` date and will fail if used after expiration.
+
+**Current test file expiration**: Check `<expiration>` tag in `assets/Princes_of_the_Yen-epub.acsm`
+
+**When expired, tests fail with:**
+```
+E_ADEPT_REQUEST_EXPIRED
+```
+
+**How to get a fresh ACSM file:**
+
+1. Go to [Google Books](https://books.google.com)
+2. Find a free book with EPUB/PDF download (e.g., "Princes of the Yen")
+3. Click "Download EPUB" or "Download PDF"
+4. Download the `.acsm` file (not the actual book)
+5. Replace `assets/Princes_of_the_Yen-epub.acsm` with the new file
+6. Update the expiration date in this README
+
+### 🔐 Device Credential Persistence
+
+The Lambda function now **persists Adobe device credentials in S3** to avoid hitting Google's device activation limits.
+
+**How it works:**
+- **First invocation**: Lambda activates a new device and uploads credentials to S3
+- **Subsequent invocations**: Lambda downloads existing credentials from S3
+- This ensures the same device is reused across invocations
+
+**Device credentials bucket:**
+```bash
+./pumi stack output device_credentials_bucket
+```
+
+**If you encounter device limit errors:**
+```
+E_GOOGLE_DEVICE_LIMIT_REACHED
+```
+
+**Solution - Reset device credentials:**
+```bash
+aws s3 rm s3://$(./pumi stack output device_credentials_bucket --show-secrets)/credentials/ --recursive
+```
+
+This will force the Lambda to activate a new device on the next invocation.
+
 ## API Testing
 
 The tests validate the Lambda function API according to the User Workflow documented in `instructions.md`:

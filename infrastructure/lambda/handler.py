@@ -12,10 +12,274 @@ import subprocess
 import os
 import tempfile
 import boto3
+from botocore.exceptions import ClientError
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 import urllib.request
 import urllib.error
+import shutil
+import logging
+import traceback
+import sys
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Add formatter for better log structure
+for handler in logger.handlers:
+    handler.setFormatter(
+        logging.Formatter(
+            '[%(levelname)s] %(funcName)s:%(lineno)d - %(message)s'
+        )
+    )
+
+
+def activate_device_with_adept():
+    """
+    Run adept_activate to generate device credentials if they don't exist.
+    Uses anonymous activation (no Adobe ID required).
+    """
+    logger.info("=" * 60)
+    logger.info("STARTING DEVICE ACTIVATION WITH ADEPT_ACTIVATE")
+    logger.info("=" * 60)
+    
+    credentials_dir = "/tmp/knock/acsm"
+    
+    # Check if credentials already exist before clearing
+    credential_files = ["activation.xml", "device.xml", "devicesalt"]
+    if os.path.exists(credentials_dir):
+        existing_files = [f for f in credential_files if os.path.exists(os.path.join(credentials_dir, f))]
+        logger.info(f"Found existing directory with files: {existing_files}")
+        
+        if len(existing_files) == len(credential_files):
+            logger.info("✓ All device credentials already exist, skipping activation")
+            return True
+        
+        # Directory exists but incomplete - clear it to avoid interactive prompt
+        logger.info("Clearing incomplete credentials directory to avoid interactive prompt...")
+        shutil.rmtree(credentials_dir)
+    
+    # Create fresh directory
+    os.makedirs(credentials_dir, exist_ok=True)
+    logger.info(f"Created fresh credentials directory: {credentials_dir}")
+    
+    # Run adept_activate to generate credentials
+    adept_binary = os.path.join(os.environ["LAMBDA_TASK_ROOT"], "knock", "adept_activate")
+    logger.info(f"Binary path: {adept_binary}")
+    logger.info(f"Binary exists: {os.path.exists(adept_binary)}")
+    
+    if not os.path.exists(adept_binary):
+        logger.error(f"✗ adept_activate binary not found at {adept_binary}")
+        return False
+    
+    # Log binary info
+    try:
+        stat_info = os.stat(adept_binary)
+        logger.info(f"Binary size: {stat_info.st_size} bytes")
+        logger.info(f"Binary permissions: {oct(stat_info.st_mode)}")
+    except Exception as e:
+        logger.warning(f"Could not stat binary: {e}")
+    
+    # Set up environment
+    lib_path = os.path.join(os.environ["LAMBDA_TASK_ROOT"], "lib")
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+    logger.info(f"LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
+    
+    # Check memory before running
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            meminfo = f.read()
+            for line in meminfo.split('\n'):
+                if 'MemAvailable' in line or 'MemFree' in line:
+                    logger.info(line.strip())
+    except Exception as e:
+        logger.warning(f"Could not read meminfo: {e}")
+    
+    cmd = [adept_binary, "-a", "-v", "-v", "-O", credentials_dir]
+    logger.info(f"Executing command: {' '.join(cmd)}")
+    logger.info("Starting adept_activate (timeout: 120s)...")
+    
+    # Write output to temp files instead of buffering in memory (avoid OOM)
+    stdout_file = "/tmp/adept_activate_stdout.log"
+    stderr_file = "/tmp/adept_activate_stderr.log"
+    
+    try:
+        with open(stdout_file, 'w') as out, open(stderr_file, 'w') as err:
+            result = subprocess.run(
+                cmd,
+                stdout=out,
+                stderr=err,
+                timeout=120,
+                env=env,
+                input="y\n",  # Answer the overwrite prompt with 'y'
+                text=True
+            )
+        
+        logger.info(f"Process completed with return code: {result.returncode}")
+        
+        # Read and log output files (with size limits)
+        try:
+            with open(stdout_file, 'r') as f:
+                stdout_lines = f.readlines()
+                logger.info(f"STDOUT: {len(stdout_lines)} lines")
+                if stdout_lines:
+                    logger.info("=== ADEPT_ACTIVATE STDOUT (first 30 lines) ===")
+                    for i, line in enumerate(stdout_lines[:30], 1):
+                        logger.info(f"  {i}: {line.rstrip()}")
+                    if len(stdout_lines) > 30:
+                        logger.info(f"  ... ({len(stdout_lines) - 30} more lines)")
+        except Exception as e:
+            logger.warning(f"Could not read stdout file: {e}")
+        
+        try:
+            with open(stderr_file, 'r') as f:
+                stderr_lines = f.readlines()
+                logger.info(f"STDERR: {len(stderr_lines)} lines")
+                if stderr_lines:
+                    logger.warning("=== ADEPT_ACTIVATE STDERR (first 30 lines) ===")
+                    for i, line in enumerate(stderr_lines[:30], 1):
+                        logger.warning(f"  {i}: {line.rstrip()}")
+                    if len(stderr_lines) > 30:
+                        logger.warning(f"  ... ({len(stderr_lines) - 30} more lines)")
+        except Exception as e:
+            logger.warning(f"Could not read stderr file: {e}")
+        
+        if result.returncode != 0:
+            logger.error(f"✗ adept_activate failed with return code {result.returncode}")
+            return False
+        
+        # Verify credentials were created
+        created_files = [f for f in credential_files if os.path.exists(os.path.join(credentials_dir, f))]
+        logger.info(f"Created credential files: {created_files}")
+        
+        # Cleanup temp log files
+        for log_file in [stdout_file, stderr_file]:
+            try:
+                if os.path.exists(log_file):
+                    os.remove(log_file)
+            except Exception as e:
+                logger.warning(f"Could not remove {log_file}: {e}")
+        
+        if len(created_files) == len(credential_files):
+            logger.info("✓ Device credentials generated successfully")
+            return True
+        else:
+            logger.error(f"✗ Not all credential files were created. Missing: {set(credential_files) - set(created_files)}")
+            return False
+        
+    except subprocess.TimeoutExpired as e:
+        logger.error("✗ adept_activate TIMED OUT after 120 seconds")
+        logger.error("This suggests the process is hanging - likely network issue or interactive prompt")
+        
+        # Try to read partial output from files
+        try:
+            if os.path.exists(stdout_file):
+                with open(stdout_file, 'r') as f:
+                    lines = f.readlines()[:20]
+                    if lines:
+                        logger.info("Partial stdout before timeout:")
+                        for line in lines:
+                            logger.info(f"  {line.rstrip()}")
+        except Exception as ex:
+            logger.warning(f"Could not read partial stdout: {ex}")
+        
+        try:
+            if os.path.exists(stderr_file):
+                with open(stderr_file, 'r') as f:
+                    lines = f.readlines()[:20]
+                    if lines:
+                        logger.warning("Partial stderr before timeout:")
+                        for line in lines:
+                            logger.warning(f"  {line.rstrip()}")
+        except Exception as ex:
+            logger.warning(f"Could not read partial stderr: {ex}")
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"✗ Unexpected error running adept_activate: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(traceback.format_exc())
+        return False
+
+
+def sync_device_credentials_from_s3():
+    """
+    Download device credentials from S3 to /tmp/knock/acsm if they exist.
+    This ensures the same device is used across Lambda invocations,
+    avoiding the Google device limit error.
+    """
+    logger.info("Syncing device credentials from S3...")
+    device_bucket = os.environ.get("DEVICE_CREDENTIALS_BUCKET")
+    if not device_bucket:
+        logger.warning("DEVICE_CREDENTIALS_BUCKET not configured")
+        return False
+    
+    logger.info(f"S3 bucket: {device_bucket}")
+    
+    s3 = boto3.client("s3")
+    credentials_dir = "/tmp/knock/acsm"
+    os.makedirs(credentials_dir, exist_ok=True)
+    
+    # List of credential files to sync
+    credential_files = ["activation.xml", "device.xml", "devicesalt"]
+    
+    downloaded_count = 0
+    try:
+        for filename in credential_files:
+            s3_key = f"credentials/{filename}"
+            local_path = os.path.join(credentials_dir, filename)
+            
+            try:
+                s3.download_file(device_bucket, s3_key, local_path)
+                print(f"Downloaded device credential: {filename}")
+                downloaded_count += 1
+            except ClientError as e:
+                code = e.response.get('Error', {}).get('Code')
+                if code in ("NoSuchKey", "404", "NotFound"):
+                    print(f"Device credential not found in S3: {filename}")
+                else:
+                    print(f"Failed to download {filename}: {e}")
+            except Exception as e:
+                print(f"Failed to download {filename}: {e}")
+    except Exception as e:
+        print(f"Error syncing device credentials from S3: {e}")
+    
+    # Return True if all files were downloaded
+    return downloaded_count == len(credential_files)
+
+
+def sync_device_credentials_to_s3():
+    """
+    Upload device credentials from /tmp/knock/acsm to S3 for persistence.
+    This is called after successful device activation.
+    """
+    device_bucket = os.environ.get("DEVICE_CREDENTIALS_BUCKET")
+    if not device_bucket:
+        return
+    
+    s3 = boto3.client("s3")
+    credentials_dir = "/tmp/knock/acsm"
+    
+    if not os.path.exists(credentials_dir):
+        return
+    
+    # Upload all files in the credentials directory
+    try:
+        for filename in os.listdir(credentials_dir):
+            local_path = os.path.join(credentials_dir, filename)
+            if os.path.isfile(local_path):
+                s3_key = f"credentials/{filename}"
+                try:
+                    s3.upload_file(local_path, device_bucket, s3_key)
+                    print(f"Uploaded device credential: {filename}")
+                except Exception as e:
+                    print(f"Failed to upload {filename}: {e}")
+    except Exception as e:
+        print(f"Error syncing device credentials to S3: {e}")
+
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -29,25 +293,30 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns:
         Dict containing response with converted files or error information
     """
+    logger.info("\n" + "#" * 80)
+    logger.info("#  KNOCK LAMBDA INVOCATION")
+    logger.info("#" * 80)
+    logger.info(f"Request ID: {context.aws_request_id if context else 'N/A'}")
+    logger.info(f"Function version: {context.function_version if context else 'N/A'}")
+    logger.info(f"Memory limit: {context.memory_limit_in_mb if context else 'N/A'} MB")
+    
     try:
-        # Parse the request body for Function URL invocations
+        # Parse the request body first to validate inputs early
         if "body" in event and event["body"]:
             try:
-                # Parse JSON body from Function URL request
-                body = json.loads(event["body"])
+                body = json.loads(event["body"])  # Function URL JSON body
             except json.JSONDecodeError:
                 return {
                     "statusCode": 400,
                     "body": json.dumps({"error": "Invalid JSON in request body"}),
                 }
         else:
-            # Direct invocation or event already parsed
-            body = event
+            # Direct invocation or already-parsed event
+            body = event or {}
 
-        # Get the ACSM file URL or content from the parsed body
+        # Validate required parameters before any heavy work
         acsm_url = body.get("acsm_url")
         acsm_content = body.get("acsm_content")
-
         if not acsm_url and not acsm_content:
             return {
                 "statusCode": 400,
@@ -55,6 +324,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     {"error": "Either acsm_url or acsm_content is required"}
                 ),
             }
+
+        # Ensure device credentials are available only after input validation
+        credentials_exist = sync_device_credentials_from_s3()
+        if not credentials_exist:
+            print("No credentials in S3, generating new credentials with adept_activate...")
+            if not activate_device_with_adept():
+                return {
+                    "statusCode": 500,
+                    "body": json.dumps({
+                        "error": "Failed to activate device. Could not generate credentials."
+                    })
+                }
+            # Upload newly generated credentials to S3
+            sync_device_credentials_to_s3()
+        else:
+            print("Using existing credentials from S3")
 
         # Create temporary directory for processing
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -96,6 +381,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ),
                 }
 
+            # Ensure shared libraries can be found
+            lib_path = os.path.join(os.environ["LAMBDA_TASK_ROOT"], "lib")
+            env = os.environ.copy()
+            env["LD_LIBRARY_PATH"] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+
+            # Log environment for debugging
+            logger.info("="  * 60)
+            logger.info("RUNNING KNOCK CONVERSION")
+            logger.info("=" * 60)
+            logger.info(f"LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
+            logger.info(f"Knock binary path: {knock_binary}")
+            logger.info(f"ACSM path: {acsm_path}")
+            logger.info(f"Working directory: {tmp_dir}")
+            
             # Execute Knock conversion
             try:
                 result = subprocess.run(
@@ -104,7 +403,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     capture_output=True,
                     text=True,
                     timeout=600,  # 10 minute timeout
+                    env=env  # Use environment with updated LD_LIBRARY_PATH
                 )
+                
+                # Sync device credentials immediately after first run
+                # This ensures they're saved even if conversion fails
+                sync_device_credentials_to_s3()
+                
+                # Log the full output for debugging
+                logger.info(f"Knock stdout: {result.stdout}")
+                logger.info(f"Knock stderr: {result.stderr}")
+                logger.info(f"Knock return code: {result.returncode}")
+                
             except subprocess.TimeoutExpired:
                 return {
                     "statusCode": 500,
@@ -139,10 +449,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
 
     except Exception as e:
+        logger.error("\n" + "!" * 80)
+        logger.error("!  UNHANDLED EXCEPTION IN LAMBDA HANDLER")
+        logger.error("!" * 80)
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Exception message: {str(e)}")
+        logger.error("Stack trace:")
+        logger.error(traceback.format_exc())
+        
         return {
             "statusCode": 500,
             "body": json.dumps(
-                {"error": f"Unexpected error: {str(e)}", "error_type": type(e).__name__}
+                {
+                    "error": f"Unexpected error: {str(e)}",
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc().split('\n')[-10:]  # Last 10 lines
+                }
             ),
         }
 

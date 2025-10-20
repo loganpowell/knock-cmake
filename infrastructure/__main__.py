@@ -154,6 +154,13 @@ output_bucket = aws.s3.Bucket(
     force_destroy=True,
 )
 
+# Create S3 bucket for device credentials (persistent storage)
+device_credentials_bucket = aws.s3.Bucket(
+    "knock-device-credentials-bucket",
+    bucket=f"{PROJECT_NAME}-device-credentials-{STACK_NAME}",
+    force_destroy=True,
+)
+
 # Create lifecycle configuration for output bucket
 output_bucket_lifecycle = aws.s3.BucketLifecycleConfiguration(
     "knock-output-bucket-lifecycle",
@@ -246,13 +253,13 @@ codebuild_policy = aws.iam.RolePolicy(
 # This approach doesn't require Docker on the local machine
 
 # Upload source code to S3 (include project root directory)
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 source_object = aws.s3.BucketObject(
     "source-code",
     bucket=source_bucket.bucket,
     key="source.zip",
-    source=pulumi.FileArchive(
-        ".."
-    ),  # Include the project root directory (parent of infrastructure/)
+    source=pulumi.FileArchive(project_root),  # Use absolute path to project root
     opts=pulumi.ResourceOptions(depends_on=[source_bucket]),
 )
 
@@ -317,12 +324,12 @@ lambda_policy_attachment = aws.iam.RolePolicyAttachment(
     policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
 )
 
-# Add S3 permissions for Lambda to access output bucket
+# Add S3 permissions for Lambda to access output bucket and device credentials bucket
 lambda_s3_policy = aws.iam.RolePolicy(
     "knock-lambda-s3-policy",
     role=lambda_role.id,
-    policy=output_bucket.arn.apply(
-        lambda bucket_arn: json.dumps(
+    policy=pulumi.Output.all(output_bucket.arn, device_credentials_bucket.arn).apply(
+        lambda arns: json.dumps(
             {
                 "Version": "2012-10-17",
                 "Statement": [
@@ -334,12 +341,12 @@ lambda_s3_policy = aws.iam.RolePolicy(
                             "s3:GetObject",
                             "s3:DeleteObject",
                         ],
-                        "Resource": f"{bucket_arn}/*",
+                        "Resource": [f"{arns[0]}/*", f"{arns[1]}/*"],
                     },
                     {
                         "Effect": "Allow",
                         "Action": "s3:ListBucket",
-                        "Resource": bucket_arn,
+                        "Resource": [arns[0], arns[1]],
                     },
                 ],
             }
@@ -389,23 +396,34 @@ lambda_function = aws.lambda_.Function(
     role=lambda_role.arn,
     timeout=LAMBDA_TIMEOUT,  # Configurable timeout
     memory_size=LAMBDA_MEMORY,  # Configurable memory
-    environment={
-        "variables": {
-            "PYTHONPATH": "/var/task",
-            "OUTPUT_BUCKET": output_bucket.bucket,
+    environment=pulumi.Output.all(
+        image_digest_command.stdout,
+        output_bucket.bucket,
+        device_credentials_bucket.bucket
+    ).apply(
+        lambda args: {
+            "variables": {
+                "PYTHONPATH": "/var/task",
+                "OUTPUT_BUCKET": args[1],
+                "DEVICE_CREDENTIALS_BUCKET": args[2],
+                "IMAGE_DIGEST": args[0].strip(),  # Forces Lambda update on new image
+            }
         }
-    },
+    ),
     opts=pulumi.ResourceOptions(
         depends_on=[lambda_policy_attachment, lambda_s3_policy, image_digest_command]
     ),
 )
 
-# Wait for Lambda function to be active and updated
+# Wait for Lambda function to be active and updated with the correct image
 lambda_wait_command = command.local.Command(
     "lambda-wait-active",
-    create=pulumi.Output.concat(lambda_function.name).apply(
-        lambda function_name: f"bash lambda-wait.sh '{function_name}' '{AWS_REGION}'"
+    create=pulumi.Output.all(lambda_function.name, image_digest_command.stdout).apply(
+        lambda args: f"bash lambda-wait.sh '{args[0]}' '{AWS_REGION}' '{args[1].strip()}'"
     ),
+    triggers=[
+        image_digest_command.stdout,
+    ],  # Re-run when image changes
     opts=pulumi.ResourceOptions(depends_on=[lambda_function]),
 )
 
@@ -438,5 +456,6 @@ pulumi.export("lambda_function_arn", lambda_function.arn)
 pulumi.export("function_url", function_url.function_url)
 pulumi.export("source_bucket", source_bucket.bucket)
 pulumi.export("output_bucket", output_bucket.bucket)
+pulumi.export("device_credentials_bucket", device_credentials_bucket.bucket)
 pulumi.export("codebuild_project_name", codebuild_project.name)
 pulumi.export("codebuild_run_id", build_command.id)

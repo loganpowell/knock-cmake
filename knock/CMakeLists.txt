@@ -20,3 +20,10 @@ target_link_libraries(knock
 target_compile_definitions(knock
     PUBLIC KNOCK_VERSION="${KNOCK_VERSION}"
 )
+
+# Ensure adept_activate is built alongside knock
+# Since libgourou is added with EXCLUDE_FROM_ALL, we need to explicitly build adept_activate
+add_dependencies(knock adept_activate)
+
+# Install adept_activate alongside knock
+install(TARGETS adept_activate DESTINATION .)

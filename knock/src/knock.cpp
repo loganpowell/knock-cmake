@@ -5,6 +5,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <openssl/opensslv.h>
+#include <openssl/crypto.h>
+#include <curl/curl.h>
 #include "drmprocessorclientimpl.h"
 #include "libgourou.h"
 #include "libgourou_common.h"
@@ -64,6 +67,23 @@ void verify_absence(std::string file);
 void verify_presence(std::string file);
 
 int main(int argc, char **argv) try {
+  // Print version information for debugging
+  std::cerr << "[DEBUG] Knock version: " KNOCK_VERSION << std::endl;
+  std::cerr << "[DEBUG] libgourou version: " LIBGOUROU_VERSION << std::endl;
+  std::cerr << "[DEBUG] OpenSSL version: " << OPENSSL_VERSION_TEXT << std::endl;
+  std::cerr << "[DEBUG] libcurl version: " << curl_version() << std::endl;
+  
+  // Check if running in Lambda
+  const char* lambda_root = std::getenv("LAMBDA_TASK_ROOT");
+  const char* aws_region = std::getenv("AWS_REGION");
+  if (lambda_root) {
+    std::cerr << "[DEBUG] Running in AWS Lambda" << std::endl;
+    std::cerr << "[DEBUG] LAMBDA_TASK_ROOT: " << lambda_root << std::endl;
+  }
+  if (aws_region) {
+    std::cerr << "[DEBUG] AWS_REGION: " << aws_region << std::endl;
+  }
+  
   if (argc == 1) {
     std::cout << "info: knock version " KNOCK_VERSION ", libgourou version " LIBGOUROU_VERSION "\n"
       "usage: " << argv[0] << " [ACSM]\n"
@@ -89,16 +109,43 @@ int main(int argc, char **argv) try {
   verify_absence(pdf_file);
   verify_absence(epub_file);
 
+  std::cerr << "[DEBUG] Creating DRM processor with data_dir: " << data_dir << std::endl;
+  
   DRMProcessorClientImpl client;
-  gourou::DRMProcessor *processor = gourou::DRMProcessor::createDRMProcessor(
-      &client,
-      false, // don't "always generate a new device" (default)
-      data_dir
-  );
+  gourou::DRMProcessor *processor = nullptr;
+  
+  try {
+    processor = gourou::DRMProcessor::createDRMProcessor(
+        &client,
+        false, // don't "always generate a new device" (default)
+        data_dir
+    );
+    std::cerr << "[DEBUG] DRM processor created successfully" << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[ERROR] Failed to create DRM processor: " << e.what() << std::endl;
+    throw;
+  }
 
   std::cout << "anonymously signing in..." << std::endl;
-  processor->signIn("anonymous", "");
-  processor->activateDevice();
+  std::cerr << "[DEBUG] Calling signIn()..." << std::endl;
+  try {
+    processor->signIn("anonymous", "");
+    std::cerr << "[DEBUG] signIn() completed" << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[ERROR] signIn() failed: " << e.what() << std::endl;
+    delete processor;
+    throw;
+  }
+  
+  std::cerr << "[DEBUG] Calling activateDevice()..." << std::endl;
+  try {
+    processor->activateDevice();
+    std::cerr << "[DEBUG] activateDevice() completed" << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[ERROR] activateDevice() failed: " << e.what() << std::endl;
+    delete processor;
+    throw;
+  }
 
   std::cout << "downloading the file from Adobe..." << std::endl;
   gourou::FulfillmentItem *item = processor->fulfill(acsm_file);

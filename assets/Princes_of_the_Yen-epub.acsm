@@ -2,8 +2,8 @@
 <fulfillmentToken fulfillmentType="buy" xmlns="http://ns.adobe.com/adept">
     <distributor>urn:uuid:00000000-0000-0000-0000-000000000001</distributor>
     <operatorURL>http://books.google.com/books/acs4/fulfillment</operatorURL>
-    <expiration>2025-10-16T09:34:55-07:00</expiration>
-    <transaction>ge:6dcf2e9a-31a9-b54e-8c76-c039a5b903ba:1760631595163840</transaction>
+    <expiration>2025-10-19T12:32:29-07:00</expiration>
+    <transaction>ge:6dcf2e9a-31a9-b54e-8c76-c039a5b903ba:1760901449093561</transaction>
     <userId>00333544833052800531</userId>
     <resourceItemInfo>
         <resource>urn:uuid:6dcf2e9a-31a9-b54e-8c76-c039a5b903ba</resource>
@@ -11,5 +11,5 @@
         <src>https://books.google.com/books/download/Princes_of_the_Yen.epub?acsid=urn:uuid:6dcf2e9a-31a9-b54e-8c76-c039a5b903ba&amp;output=acs4_book_bytes&amp;ar=e1ca9c6c8e837b87b0ae9cf8181829d9</src>
         <downloadType>simple</downloadType>
     </resourceItemInfo>
-    <hmac>do53E9Sh/0GE3xmJIkp859o49kE=</hmac>
+    <hmac>jfC4zGIU1ITb4Yiu6ULKlzYhmbQ=</hmac>
 </fulfillmentToken>

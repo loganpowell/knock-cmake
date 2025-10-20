@@ -39,32 +39,33 @@ load_env
 # Create results directory
 mkdir -p "$RESULTS_DIR"
 
-# Get Lambda function URL from Pulumi stack
-echo -e "${BLUE}Getting Lambda function URL from Pulumi stack...${NC}"
+# Resolve Lambda function URL (refresh from Pulumi; prompt for passphrase if needed)
 cd "$PROJECT_ROOT"
 
-# Set passphrase if available in environment
+# Ensure passphrase from environment (.env) is exported if present
 if [ -n "${PULUMI_CONFIG_PASSPHRASE:-}" ]; then
     export PULUMI_CONFIG_PASSPHRASE="$PULUMI_CONFIG_PASSPHRASE"
 fi
 
-FUNCTION_URL=$(./pumi stack output function_url 2>/dev/null | grep -E "^https://" || echo "")
+get_pulumi_function_url() {
+    ./pumi stack output function_url 2>/dev/null | grep -E "^https://" || echo ""
+}
+
+FUNCTION_URL="$(get_pulumi_function_url)"
+
+# If lookup failed, prompt for passphrase interactively and retry
+if [ -z "$FUNCTION_URL" ] && [ -t 0 ]; then
+    echo -e "${YELLOW}Pulumi output requires a passphrase.${NC}"
+    read -s -p "Enter Pulumi passphrase: " PULUMI_CONFIG_PASSPHRASE; echo
+    export PULUMI_CONFIG_PASSPHRASE
+    echo -e "${BLUE}Retrying Pulumi lookup...${NC}"
+    FUNCTION_URL="$(get_pulumi_function_url)"
+fi
 
 if [ -z "$FUNCTION_URL" ]; then
-    echo -e "${RED}❌ Could not get function URL from Pulumi stack${NC}"
-    echo "Make sure the stack is deployed with: ./pumi up"
-    echo "Or set PULUMI_CONFIG_PASSPHRASE environment variable"
-    echo ""
-    echo "You can also manually set the function URL:"
-    echo "export FUNCTION_URL='https://your-lambda-url.amazonaws.com/'"
-    echo "Then run the tests again"
-    
-    # Check if FUNCTION_URL is set manually
-    if [ -n "${FUNCTION_URL:-}" ]; then
-        echo -e "${GREEN}✓ Using manually set function URL: $FUNCTION_URL${NC}"
-    else
-        exit 1
-    fi
+    echo -e "${RED}❌ Could not retrieve function URL from Pulumi.${NC}"
+    echo "Ensure PULUMI_CONFIG_PASSPHRASE is set in .env or provide it interactively, then retry."
+    exit 1
 fi
 
 echo -e "${GREEN}✓ Function URL: $FUNCTION_URL${NC}"
@@ -128,10 +129,19 @@ call_lambda() {
 
 # Test 1: Health check / Basic connectivity
 test_health_check() {
-    echo "Testing basic Lambda connectivity..."
+    echo "Testing basic Lambda connectivity with ACSM asset..."
     
-    # Use a minimal valid payload that should trigger a meaningful response
-    local payload='{"acsm_content": "test"}'
+    # Prefer using the bundled ACSM asset for a realistic request
+    local acsm_file="$ASSETS_DIR/Princes_of_the_Yen-epub.acsm"
+    local payload
+    if [ -f "$acsm_file" ]; then
+        echo "📂 Reading ACSM file: $acsm_file"
+        local acsm_content=$(cat "$acsm_file" | jq -R -s '.')
+        payload="{\"acsm_content\": $acsm_content}"
+    else
+        echo "⚠️  ACSM asset not found, falling back to minimal payload"
+        payload='{"acsm_content": "test"}'
+    fi
     
     # Make the request and capture status
     local output_file="$RESULTS_DIR/health_check_response.json"
@@ -143,7 +153,7 @@ test_health_check() {
         -o "$output_file")
     
     echo "📡 Making request to: $FUNCTION_URL"
-    echo "📄 Payload: $payload"
+    echo "📄 Payload: (ACSM content)"
     echo "📊 HTTP Status: $http_code"
     echo "💾 Response saved to: $output_file"
     
