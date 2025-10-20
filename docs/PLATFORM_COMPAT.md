@@ -20,7 +20,7 @@ All scripts that might run in different environments should source this file:
 
 # Load platform compatibility layer
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/platform-compat.sh"
+source "$SCRIPT_DIR/shell_scripts/platform-compat.sh"
 
 # Now you can use cross-platform functions
 response=$(curl -s -w "\n%{http_code}" ...)
@@ -33,6 +33,7 @@ body=$(echo "$response" | all_but_last_line)
 ### Text Processing
 
 - **`all_but_last_line`** - Get all lines except the last (replaces `head -n -1`)
+
   ```bash
   echo "$output" | all_but_last_line
   ```
@@ -45,11 +46,13 @@ body=$(echo "$response" | all_but_last_line)
 ### File Operations
 
 - **`absolute_path <path>`** - Get absolute path (replaces `readlink -f`)
+
   ```bash
   abs_path=$(absolute_path "relative/path/to/file")
   ```
 
 - **`file_modified_time <path>`** - Get file modification timestamp
+
   ```bash
   mtime=$(file_modified_time "/path/to/file")
   ```
@@ -62,6 +65,7 @@ body=$(echo "$response" | all_but_last_line)
 ### Date/Time
 
 - **`iso_timestamp`** - Get current timestamp in ISO 8601 format
+
   ```bash
   timestamp=$(iso_timestamp)  # 2025-10-19T17:42:38Z
   ```
@@ -85,11 +89,13 @@ body=$(echo "$response" | all_but_last_line)
 ### Utilities
 
 - **`json_escape <string>`** - Escape a string for use in JSON
+
   ```bash
   escaped=$(json_escape "string with \"quotes\"")
   ```
 
 - **`require_command <cmd> [hint]`** - Check if command exists, fail with message
+
   ```bash
   require_command "jq" "Install with: brew install jq"
   ```
@@ -102,7 +108,7 @@ body=$(echo "$response" | all_but_last_line)
 ### Logging
 
 - **`log_info <message>`** - Print info message with timestamp
-- **`log_success <message>`** - Print success message with timestamp  
+- **`log_success <message>`** - Print success message with timestamp
 - **`log_warning <message>`** - Print warning message with timestamp
 - **`log_error <message>`** - Print error message to stderr with timestamp
 
@@ -118,7 +124,7 @@ log_error "Deployment failed"
 The compatibility layer automatically detects the platform and exports the `$PLATFORM` variable:
 
 ```bash
-source platform-compat.sh
+source shell_scripts/platform-compat.sh
 
 if [ "$PLATFORM" = "macos" ]; then
     echo "Running on macOS"
@@ -132,7 +138,7 @@ fi
 Enable debug mode to see platform detection information:
 
 ```bash
-DEBUG=1 source platform-compat.sh
+DEBUG=1 source shell_scripts/platform-compat.sh
 # Output:
 # Platform compatibility layer loaded
 #   Platform: macos
@@ -152,20 +158,20 @@ Currently, these scripts source the compatibility layer:
 
 When writing new scripts:
 
-1. **Always source** `platform-compat.sh` at the beginning
+1. **Always source** `shell_scripts/platform-compat.sh` at the beginning
 2. **Use the provided functions** instead of platform-specific commands
 3. **Test on both macOS and Linux** when possible
 4. **Add new functions** to the compatibility layer if you encounter new cross-platform issues
 
 ### Common Replacements
 
-| Instead of | Use |
-|------------|-----|
-| `head -n -1` | `all_but_last_line` |
-| `tail -n 1` | `get_last_line` |
-| `readlink -f` | `absolute_path` |
+| Instead of            | Use                                       |
+| --------------------- | ----------------------------------------- |
+| `head -n -1`          | `all_but_last_line`                       |
+| `tail -n 1`           | `get_last_line`                           |
+| `readlink -f`         | `absolute_path`                           |
 | `stat -c` / `stat -f` | `file_modified_time` or `file_size_human` |
-| `date --iso-8601` | `iso_timestamp` |
+| `date --iso-8601`     | `iso_timestamp`                           |
 
 ## Future Enhancements
 
@@ -179,6 +185,6 @@ Potential additions to the compatibility layer:
 
 ## Related Files
 
-- `platform-compat.sh` - The compatibility layer implementation
-- `lambda-wait.sh` - Example usage in Lambda deployment
-- `deploy.sh` - Example usage in deployment wrapper
+- `infrastructure/shell_scripts/platform-compat.sh` - The compatibility layer implementation
+- `infrastructure/shell_scripts/lambda-wait.sh` - Example usage in Lambda deployment
+- `scripts/deploy.sh` - Example usage in deployment wrapper

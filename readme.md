@@ -100,9 +100,9 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 ### Infrastructure & Deployment
 
 - **[infrastructure/README.md](infrastructure/README.md)** - Complete deployment guide with Pulumi setup
-- **[infrastructure/CONFIG.md](infrastructure/CONFIG.md)** - Configuration options (timeouts, memory, regions)
+- **[infrastructure/CONFIG.md](docs/CONFIG.md)** - Configuration options (timeouts, memory, regions)
 - **[infrastructure/lambda/README.md](infrastructure/lambda/README.md)** - Lambda API reference and handler details
-- **[infrastructure/PLATFORM_COMPAT.md](infrastructure/PLATFORM_COMPAT.md)** - Cross-platform shell scripting utilities
+- **[infrastructure/PLATFORM_COMPAT.md](docs/PLATFORM_COMPAT.md)** - Cross-platform shell scripting utilities
 
 ### Build System
 
@@ -234,6 +234,7 @@ pytest tests/ -m "not real_acsm"
 ⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota.
 
 See complete testing documentation:
+
 - [tests/QUICK_START.md](tests/QUICK_START.md) - Get started in 1 minute
 - [tests/TEST_GUIDE.md](tests/TEST_GUIDE.md) - Complete pytest guide
 - [tests/README.md](tests/README.md) - Shell script tests (legacy)
@@ -276,4 +277,3 @@ This project is licensed under GPLv3. The Knock application and its dependencies
 - [Pulumi Documentation](https://www.pulumi.com/docs/)
 - [Knock Original Repository](https://github.com/BentonEdmondson/knock) (currently offline)
 - [Adobe ADEPT Protocol](https://www.adobe.com/solutions/ebook/digital-editions.html)
-

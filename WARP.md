@@ -7,6 +7,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 knock-lambda is a serverless AWS Lambda function that converts Adobe ACSM files to DRM-free PDF/EPUB ebooks. It packages the Knock ACSM converter (C++) as a container-based Lambda function with automated deployment via Pulumi.
 
 **Key Features:**
+
 - Container-based AWS Lambda function with HTTP API endpoint
 - Automated build via AWS CodeBuild (no local Docker required)
 - Infrastructure as Code with Pulumi
@@ -37,18 +38,22 @@ Local Source → S3 Bucket → CodeBuild → ECR → Lambda Function
 ### Local Build (for testing)
 
 **Primary Build Command:**
+
 ```bash
 python3 build_container.py
 ```
+
 - Uses local dependencies from `deps/` directory (no network required)
 - Builds Knock binary using CMake
 - Outputs to `./build-output/knock`
 - Dynamic linking for Lambda container compatibility
 
 **Legacy Build (for standalone binaries):**
+
 ```bash
 python3 build.py
 ```
+
 - Clones dependencies from git (requires network)
 - Builds static binary at `./knock/knock`
 - Use for creating portable standalone binaries
@@ -56,24 +61,29 @@ python3 build.py
 ### Container Build (for Lambda deployment)
 
 **Via Pulumi (recommended):**
+
 ```bash
 cd infrastructure
 pulumi up
 ```
+
 - Automatically uploads source to S3
 - Triggers CodeBuild to build Docker image
 - Deploys Lambda function with new image
 - No local Docker required
 
 **Local Docker Build (for testing):**
+
 ```bash
 docker build -f infrastructure/lambda/Dockerfile -t knock-lambda .
 ```
+
 - Builds the Lambda container locally
 - Useful for testing before deployment
 - Requires Docker installed
 
 ### Clean Build
+
 ```bash
 # Remove local build artifacts
 rm -rf ~build build-output
@@ -81,7 +91,7 @@ rm -rf ~build build-output
 
 ## Key Build Configuration
 
-- **Linking**: 
+- **Linking**:
   - Static linking by default (standalone binaries)
   - Dynamic linking for Lambda containers (set via `-DBUILD_STATIC=OFF`)
 - **Version tracking**: Knock version 79 (3.0.79)
@@ -92,17 +102,20 @@ rm -rf ~build build-output
 ## Dependencies
 
 ### Build-time Dependencies
+
 - build-essential (gcc, g++, make)
 - cmake (≥3.14)
 - libssl-dev, libcurl4-openssl-dev, zlib1g-dev
 
 ### Python Dependencies (for infrastructure)
+
 - pulumi (≥3.0.0)
 - pulumi-aws (≥7.0.0)
 - pulumi-command (≥1.0.0)
 - pytest (for testing)
 
 ### AWS Resources (created by Pulumi)
+
 - ECR repository (container images)
 - CodeBuild project (builds Docker images)
 - Lambda function (processes ACSM files)
@@ -155,17 +168,20 @@ knock-lambda/
 ### Local Development
 
 1. **Install Python dependencies:**
+
    ```bash
    uv sync
    uv shell
    ```
 
 2. **Build locally:**
+
    ```bash
    python3 build_container.py
    ```
 
 3. **Test locally:**
+
    ```bash
    pytest tests/ -m "not real_acsm"
    ```
@@ -204,6 +220,7 @@ knock-lambda/
 **Problem**: `deps/` directory missing or incomplete
 
 **Solution**:
+
 ```bash
 mkdir -p deps
 tar -xzf assets/sources/libgourou.tar.gz -C deps/
@@ -217,6 +234,7 @@ cp config/uPDFParser/CMakeLists.txt deps/uPDFParser/
 **Problem**: Adobe device activation limit reached or ACSM file expired
 
 **Solution**:
+
 1. Get a fresh ACSM file from Google Books or Internet Archive
 2. Reset device credentials:
    ```bash
@@ -231,6 +249,7 @@ See [docs/ACSM_DEVICE_LIMITS.md](docs/ACSM_DEVICE_LIMITS.md) for details.
 **Problem**: Stack not deployed or deployment failed
 
 **Solution**:
+
 ```bash
 cd infrastructure
 pulumi up
@@ -241,6 +260,7 @@ pulumi up
 **Problem**: Build errors in AWS CodeBuild
 
 **Solution**:
+
 1. Check CloudWatch logs: `pulumi stack output codebuild_project_name`
 2. Test build locally: `python3 build_container.py`
 3. Verify `deps/` directory is committed to git
@@ -297,7 +317,7 @@ pulumi config set lambda_timeout 600
 pulumi config
 ```
 
-See [infrastructure/CONFIG.md](infrastructure/CONFIG.md) for all options.
+See [infrastructure/CONFIG.md](docs/CONFIG.md) for all options.
 
 ## Reference Documentation
 

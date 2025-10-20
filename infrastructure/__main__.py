@@ -10,6 +10,7 @@ The infrastructure includes:
 - IAM roles and policies for proper access control
 """
 
+import os
 import json
 import pulumi
 import pulumi_aws as aws
@@ -86,7 +87,9 @@ def get_validated_buildspec():
     import os
 
     # Path to the buildspec file
-    buildspec_path = os.path.join(os.path.dirname(__file__), "buildspec.yml")
+    buildspec_path = os.path.join(
+        os.path.dirname(__file__), "shell_scripts", "buildspec.yml"
+    )
 
     try:
         with open(buildspec_path, "r") as f:
@@ -253,7 +256,6 @@ codebuild_policy = aws.iam.RolePolicy(
 # This approach doesn't require Docker on the local machine
 
 # Upload source code to S3 (include project root directory)
-import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 source_object = aws.s3.BucketObject(
     "source-code",
@@ -358,7 +360,7 @@ lambda_s3_policy = aws.iam.RolePolicy(
 build_command = command.local.Command(
     "knock-lambda-build-run",
     create=pulumi.Output.concat(codebuild_project.name).apply(
-        lambda project_name: f"bash codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
+        lambda project_name: f"bash shell_scripts/codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
     ),
     triggers=[
         source_object.version_id,
@@ -396,19 +398,19 @@ lambda_function = aws.lambda_.Function(
     role=lambda_role.arn,
     timeout=LAMBDA_TIMEOUT,  # Configurable timeout
     memory_size=LAMBDA_MEMORY,  # Configurable memory
-    environment=pulumi.Output.all(
-        image_digest_command.stdout,
-        output_bucket.bucket,
-        device_credentials_bucket.bucket
-    ).apply(
-        lambda args: {
-            "variables": {
+    environment=aws.lambda_.FunctionEnvironmentArgs(
+        variables=pulumi.Output.all(
+            image_digest_command.stdout,
+            output_bucket.bucket,
+            device_credentials_bucket.bucket,
+        ).apply(
+            lambda args: {
                 "PYTHONPATH": "/var/task",
                 "OUTPUT_BUCKET": args[1],
                 "DEVICE_CREDENTIALS_BUCKET": args[2],
                 "IMAGE_DIGEST": args[0].strip(),  # Forces Lambda update on new image
             }
-        }
+        )
     ),
     opts=pulumi.ResourceOptions(
         depends_on=[lambda_policy_attachment, lambda_s3_policy, image_digest_command]
@@ -419,7 +421,7 @@ lambda_function = aws.lambda_.Function(
 lambda_wait_command = command.local.Command(
     "lambda-wait-active",
     create=pulumi.Output.all(lambda_function.name, image_digest_command.stdout).apply(
-        lambda args: f"bash lambda-wait.sh '{args[0]}' '{AWS_REGION}' '{args[1].strip()}'"
+        lambda args: f"bash shell_scripts/lambda-wait.sh '{args[0]}' '{AWS_REGION}' '{args[1].strip()}'"
     ),
     triggers=[
         image_digest_command.stdout,

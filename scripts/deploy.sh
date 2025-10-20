@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Load platform compatibility layer
-source "$SCRIPT_DIR/platform-compat.sh"
+source "$SCRIPT_DIR/shell_scripts/platform-compat.sh"
 
 cd "$SCRIPT_DIR"
 
@@ -124,7 +124,7 @@ elif [ "$HTTP_CODE" = "500" ]; then
             echo "⚠️  SHARED LIBRARY ERROR DETECTED"
             echo "The build still has dynamic linking issues."
             echo "Run another build cycle with:"
-            echo "  cd $SCRIPT_DIR && bash codebuild-runner-with-digest.sh \"knock-lambda-build-dev\" \"us-east-2\" \"3\" \"10\" \"60\""
+            echo "  cd $SCRIPT_DIR && bash shell_scripts/codebuild-runner-with-digest.sh \"knock-lambda-build-dev\" \"us-east-2\" \"3\" \"10\" \"60\""
         fi
     else
         echo "Error response: $BODY"

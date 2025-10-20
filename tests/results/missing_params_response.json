@@ -1,1 +1,7 @@
-{"error": "Either acsm_url or acsm_content is required"}
+{
+  "status_code": 400,
+  "response": {
+    "error": "Either a parameter containing 'acsm' and 'url' or 'acsm' and 'content' is required"
+  },
+  "elapsed_time": 0.12885808944702148
+}

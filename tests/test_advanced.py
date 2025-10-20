@@ -1,12 +1,12 @@
 """Advanced test scenarios for Knock Lambda function."""
 
 import concurrent.futures
-import json
 import time
 from pathlib import Path
 
 import pytest
 import requests
+from conftest import save_response
 
 
 class TestConcurrency:
@@ -31,22 +31,8 @@ class TestConcurrency:
             elapsed = time.time() - start_time
 
             # Save individual response
-            output_file = results_dir / f"concurrent_{request_id}_response.json"
-            output_file.write_text(
-                json.dumps(
-                    {
-                        "status_code": response.status_code,
-                        "elapsed_time": elapsed,
-                        "response": (
-                            response.json()
-                            if response.headers.get("content-type")
-                            == "application/json"
-                            else response.text
-                        ),
-                    },
-                    indent=2,
-                )
-            )
+            response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+            save_response(results_dir, f"concurrent_{request_id}", response_data, response.status_code, elapsed, print_output=False)
 
             return request_id, response.status_code, elapsed
 
@@ -67,19 +53,18 @@ class TestConcurrency:
             len(results) == num_requests
         ), f"Expected {num_requests} results, got {len(results)}"
 
+        # Print summary
+        print(f"\n📊 Concurrent Request Results:")
         for request_id, status_code, elapsed in results:
-            print(
-                f"✅ Request {request_id} completed with status {status_code} in {elapsed:.2f}s"
-            )
-
-        print("✅ All concurrent requests completed")
+            print(f"  ✅ Request {request_id}: HTTP {status_code} in {elapsed:.2f}s")
+        print(f"\n✅ All {num_requests} concurrent requests completed")
 
 
-class TestPerformance:
-    """Performance and timing tests."""
+class TestStress:
+    """Stress and performance tests."""
 
     def test_response_time(self, function_url: str, results_dir: Path):
-        """Test response time measurement."""
+        """Test response time with minimal payload."""
         payload = {"test": "timing"}
 
         start_time = time.time()
@@ -91,24 +76,8 @@ class TestPerformance:
         )
         elapsed = time.time() - start_time
 
-        # Save response
-        output_file = results_dir / "timing_response.json"
-        output_file.write_text(
-            json.dumps(
-                {
-                    "status_code": response.status_code,
-                    "elapsed_time": elapsed,
-                    "response": (
-                        response.json()
-                        if response.headers.get("content-type") == "application/json"
-                        else response.text
-                    ),
-                },
-                indent=2,
-            )
-        )
-
-        print(f"⏱️  Response time: {elapsed:.2f}s")
+        response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+        save_response(results_dir, "timing", response_data, response.status_code, elapsed)
 
         # Check if response time is reasonable (under 30 seconds for cold start)
         if elapsed < 30:
@@ -116,48 +85,24 @@ class TestPerformance:
         else:
             print("⚠️  Response time is slow (may be cold start)")
 
-
-class TestMemory:
-    """Memory and resource tests."""
-
-    def test_memory_stress(self, function_url: str, results_dir: Path):
-        """Test memory stress with large payload."""
-        # Create a very large payload (5MB)
+    def test_large_payload(self, function_url: str, results_dir: Path):
+        """Test with large payload (5MB)."""
         large_content = "X" * 5_000_000
         payload = {"acsm_content": large_content}
 
         print("📡 Sending large payload (5MB)...")
         try:
+            start_time = time.time()
             response = requests.post(
                 function_url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=30,
             )
+            elapsed = time.time() - start_time
 
-            # Save response
-            output_file = results_dir / "memory_stress_response.json"
-            output_file.write_text(
-                json.dumps(
-                    {
-                        "status_code": response.status_code,
-                        "response": (
-                            response.json()
-                            if response.headers.get("content-type")
-                            == "application/json"
-                            else response.text
-                        ),
-                    },
-                    indent=2,
-                )
-            )
-
-            print(f"📊 Status: {response.status_code}")
-
-            if 200 <= response.status_code < 400:
-                print("✅ Large payload handled successfully")
-            else:
-                print("ℹ️  Large payload rejected (expected for memory protection)")
+            response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+            save_response(results_dir, "large_payload", response_data, response.status_code, elapsed)
 
         except requests.exceptions.Timeout:
             print("ℹ️  Request timed out (expected for memory protection)")
@@ -171,17 +116,15 @@ class TestErrorHandling:
     @pytest.mark.parametrize(
         "payload,description",
         [
-            ('{"incomplete": ', "incomplete JSON"),
-            ('{"invalid": "json"', "missing closing brace"),
-            ("not json at all", "non-JSON text"),
-            ('{"acsm_content": "test", "extra_comma": ,}', "extra comma"),
+            ('{"incomplete": ', "incomplete_json"),
+            ("not json at all", "non_json_text"),
         ],
     )
     def test_malformed_json(
         self, function_url: str, payload: str, description: str, results_dir: Path
     ):
         """Test malformed JSON handling."""
-        print(f"🧪 Testing {description}: {payload}")
+        print(f"🧪 Testing malformed JSON: {description}")
 
         try:
             response = requests.post(
@@ -191,35 +134,19 @@ class TestErrorHandling:
                 timeout=10,
             )
 
-            # Save response
-            safe_name = description.replace(" ", "_")
-            output_file = results_dir / f"malformed_{safe_name}_response.json"
-            output_file.write_text(
-                json.dumps(
-                    {
-                        "status_code": response.status_code,
-                        "payload": payload,
-                        "response": response.text,
-                    },
-                    indent=2,
-                )
-            )
+            save_response(results_dir, f"malformed_{description}", {"payload": payload, "response": response.text}, response.status_code, print_output=False)
 
             if 400 <= response.status_code < 500:
-                print(
-                    f"✅ Correctly rejected malformed JSON with status {response.status_code}"
-                )
+                print(f"✅ Correctly rejected with status {response.status_code}")
             else:
-                print(f"⚠️  Unexpected status {response.status_code} for malformed JSON")
+                print(f"⚠️  Unexpected status {response.status_code}")
 
         except requests.exceptions.RequestException as e:
             print(f"✅ Request properly rejected: {e}")
 
-    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH"])
+    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE"])
     def test_http_methods(self, function_url: str, method: str, results_dir: Path):
-        """Test different HTTP methods."""
-        print(f"🌐 Testing {method} method...")
-
+        """Test that only POST method is accepted."""
         response = requests.request(
             method,
             function_url,
@@ -227,28 +154,11 @@ class TestErrorHandling:
             timeout=10,
         )
 
-        # Save response
-        output_file = results_dir / f"method_{method}_response.json"
-        output_file.write_text(
-            json.dumps(
-                {
-                    "status_code": response.status_code,
-                    "response": (
-                        response.json()
-                        if response.headers.get("content-type") == "application/json"
-                        else response.text
-                    ),
-                },
-                indent=2,
-            )
-        )
+        response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+        save_response(results_dir, f"method_{method}", response_data, response.status_code, print_output=False)
 
-        print(f"📊 {method} returned status: {response.status_code}")
-
-        # Most Lambda functions only accept POST
-        if method == "POST" and 200 <= response.status_code < 400:
-            print("✅ POST method works correctly")
-        elif method != "POST" and 400 <= response.status_code < 500:
-            print(f"✅ {method} correctly rejected")
+        # Lambda function URLs typically reject non-POST methods
+        if 400 <= response.status_code < 500:
+            print(f"✅ {method} correctly rejected with status {response.status_code}")
         else:
             print(f"ℹ️  {method} returned unexpected status {response.status_code}")

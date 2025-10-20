@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Simple manual testing helper for Knock Lambda."""
+"""Interactive manual testing tool for Knock Lambda."""
 
 import argparse
-import json
 import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+import inquirer
 import requests
+
+# Add parent directory to path to import conftest utilities
+sys.path.insert(0, str(Path(__file__).parent))
+from conftest import find_acsm_files, select_acsm_file, print_response
 
 
 def get_function_url() -> str:
@@ -59,105 +63,113 @@ def test_acsm_file(function_url: str, acsm_file: Path):
         print(f"❌ File not found: {acsm_file}")
         return
     
-    print(f"📂 Processing ACSM file: {acsm_file}")
+    print(f"\n📂 Processing ACSM file: {acsm_file.name}")
+    print(f"   Path: {acsm_file}")
     
     # Read ACSM content
     acsm_content = acsm_file.read_text()
-    payload = {"acsm_content": acsm_content}
+    payload = {"acsm_content": acsm_content, "filename": acsm_file.name}
     
-    print("📡 Sending request...")
-    print()
+    print("\n📡 Sending request to Lambda...")
     
     start_time = time.time()
-    response = requests.post(
-        function_url,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        timeout=60,
-    )
-    elapsed = time.time() - start_time
-    
-    # Print response
-    print("📋 Response:")
-    if response.headers.get("content-type") == "application/json":
-        print(json.dumps(response.json(), indent=2))
-    else:
-        print(response.text)
-    
-    print()
-    print(f"📊 HTTP Status: {response.status_code}")
-    print(f"⏱️  Total time: {elapsed:.2f}s")
-    print(f"📦 Response size: {len(response.content)} bytes")
+    try:
+        response = requests.post(
+            function_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=90,
+        )
+        elapsed = time.time() - start_time
+        
+        # Parse and print response
+        response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+        print_response(response_data, response.status_code, elapsed)
+        
+    except requests.exceptions.Timeout:
+        print("\n❌ Request timed out after 90 seconds")
+    except requests.exceptions.RequestException as e:
+        print(f"\n❌ Request failed: {e}")
 
 
-def test_custom_content(function_url: str, content: str):
+def test_custom_content(function_url: str, dummy_acsm_content: str):
     """Test with custom content."""
-    print(f"📝 Testing with custom content: {content}")
+    print(f"\n📝 Testing with custom content (length: {len(dummy_acsm_content)} chars)")
     
-    payload = {"acsm_content": content}
+    payload = {"acsm_content": dummy_acsm_content}
     
-    print("📡 Sending request...")
-    print()
+    print("\n📡 Sending request to Lambda...")
     
     start_time = time.time()
-    response = requests.post(
-        function_url,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        timeout=60,
-    )
-    elapsed = time.time() - start_time
-    
-    # Print response
-    print("📋 Response:")
-    if response.headers.get("content-type") == "application/json":
-        print(json.dumps(response.json(), indent=2))
-    else:
-        print(response.text)
-    
-    print()
-    print(f"📊 HTTP Status: {response.status_code}")
-    print(f"⏱️  Total time: {elapsed:.2f}s")
+    try:
+        response = requests.post(
+            function_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=60,
+        )
+        elapsed = time.time() - start_time
+        
+        # Parse and print response
+        response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+        print_response(response_data, response.status_code, elapsed)
+        
+    except requests.exceptions.Timeout:
+        print("\n❌ Request timed out after 60 seconds")
+    except requests.exceptions.RequestException as e:
+        print(f"\n❌ Request failed: {e}")
 
 
 def test_basic(function_url: str):
     """Test basic connectivity."""
-    print("🔌 Testing basic connectivity...")
+    print("\n🔌 Testing basic connectivity...")
     
     payload = {"test": "basic_connectivity"}
     
+    print("\n📡 Sending test request to Lambda...")
+    
     start_time = time.time()
-    response = requests.post(
-        function_url,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        timeout=60,
-    )
-    elapsed = time.time() - start_time
+    try:
+        response = requests.post(
+            function_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=60,
+        )
+        elapsed = time.time() - start_time
+        
+        # Parse and print response
+        response_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+        print_response(response_data, response.status_code, elapsed)
+        
+    except requests.exceptions.Timeout:
+        print("\n❌ Request timed out after 60 seconds")
+    except requests.exceptions.RequestException as e:
+        print(f"\n❌ Request failed: {e}")
+
+
+def select_acsm_interactive(assets_dir: Path) -> Path:
+    """Interactively select an ACSM file from assets directory."""
+    acsm_files = find_acsm_files(assets_dir)
     
-    # Print response
-    print("📋 Response:")
-    if response.headers.get("content-type") == "application/json":
-        print(json.dumps(response.json(), indent=2))
-    else:
-        print(response.text)
+    if not acsm_files:
+        print("❌ No ACSM files found in assets directory")
+        sys.exit(1)
     
-    print()
-    print(f"📊 HTTP Status: {response.status_code}")
-    print(f"⏱️  Total time: {elapsed:.2f}s")
+    return select_acsm_file(acsm_files, interactive=True)
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Simple manual testing helper for Knock Lambda",
+        description="Interactive manual testing tool for Knock Lambda",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s basic
+  %(prog)s                   # Interactive ACSM file selection
+  %(prog)s basic              # Test basic connectivity
   %(prog)s file /path/to/file.acsm
-  %(prog)s content 'Some test content'
-  %(prog)s asset
+  %(prog)s content 'test'     # Test with custom content
         """
     )
     
@@ -167,28 +179,20 @@ Examples:
     subparsers.add_parser("basic", help="Test basic connectivity")
     
     # File test
-    file_parser = subparsers.add_parser("file", help="Test with ACSM file")
+    file_parser = subparsers.add_parser("file", help="Test with specific ACSM file")
     file_parser.add_argument("path", type=Path, help="Path to ACSM file")
     
     # Content test
     content_parser = subparsers.add_parser("content", help="Test with custom content")
     content_parser.add_argument("text", help="Content string to test")
     
-    # Asset test
-    subparsers.add_parser("asset", help="Test with bundled asset file")
-    
     args = parser.parse_args()
     
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-    
     # Get function URL
-    print("🚀 Knock Lambda Manual Tester")
-    print("=" * 30)
+    print("🚀 Knock Lambda Interactive Tester")
+    print("=" * 40)
     function_url = get_function_url()
     print(f"Function URL: {function_url}")
-    print()
     
     # Execute command
     if args.command == "basic":
@@ -197,14 +201,17 @@ Examples:
         test_acsm_file(function_url, args.path)
     elif args.command == "content":
         test_custom_content(function_url, args.text)
-    elif args.command == "asset":
+    else:
+        # No command specified - interactive ACSM selection
         project_root = Path(__file__).parent.parent
-        asset_file = project_root / "assets" / "The_Chemical_Muse-epub.acsm"
-        if asset_file.exists():
-            test_acsm_file(function_url, asset_file)
-        else:
-            print(f"❌ Asset file not found: {asset_file}")
-            sys.exit(1)
+        assets_dir = project_root / "assets"
+        
+        try:
+            acsm_file = select_acsm_interactive(assets_dir)
+            test_acsm_file(function_url, acsm_file)
+        except KeyboardInterrupt:
+            print("\n\n❌ Cancelled by user")
+            sys.exit(0)
 
 
 if __name__ == "__main__":

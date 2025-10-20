@@ -163,18 +163,18 @@ The infrastructure uses **AWS CodeBuild** for building and deploying containers 
 ┌─────────────────┐      ┌─────────────────┐
 │  CodeBuild      │─────▶│  ECR Repository │
 │  Project        │      │  (Docker Image) │
-└────────┬────────┘      └────────┬────────┘
-         │                        │
-         │ codebuild-runner-      │
-         │ with-digest.sh         │
-         ▼                        │
+└────────┬────────┘      └───────┬─────────┘
+         │                       │
+         │ codebuild-runner-     │
+         │ with-digest.sh        │
+         ▼                       │
 ┌─────────────────┐              │
 │  Build          │              │
 │  Execution      │              │
 └────────┬────────┘              │
-         │                        │
-         │ Captures image digest  │
-         ▼                        │
+         │                       │
+         │ Captures image digest │
+         ▼                       │
 ┌─────────────────┐              │
 │  Lambda         │◀─────────────┘
 │  Function       │   Uses image@digest
@@ -189,11 +189,11 @@ The infrastructure uses **AWS CodeBuild** for building and deploying containers 
 
 ### Deployment Scripts
 
-- **`codebuild-runner-with-digest.sh`**: Orchestrates CodeBuild execution, waits for completion, captures image digest, provides detailed error reporting
-- **`lambda-wait.sh`**: Waits for Lambda to become active and verifies correct image deployment
+- **`shell_scripts/codebuild-runner-with-digest.sh`**: Orchestrates CodeBuild execution, waits for completion, captures image digest, provides detailed error reporting
+- **`shell_scripts/lambda-wait.sh`**: Waits for Lambda to become active and verifies correct image deployment
+- **`shell_scripts/buildspec.yml`**: Defines CodeBuild phases (pre_build, build, post_build) for Docker image creation
+- **`shell_scripts/platform-compat.sh`**: Cross-platform shell utilities (macOS/Linux) sourced by other scripts
 - **`deploy.sh`**: One-command deployment that runs `pulumi up` and tests the Lambda
-- **`buildspec.yml`**: Defines CodeBuild phases (pre_build, build, post_build) for Docker image creation
-- **`platform-compat.sh`**: Cross-platform shell utilities (macOS/Linux) sourced by other scripts
 
 ### Dependency Management
 
@@ -201,10 +201,10 @@ Pulumi automatically manages resource dependencies with explicit ordering:
 
 ```
 ECR Repo ──┐
-            ├─▶ CodeBuild Project ──▶ CodeBuild Build ──▶ Lambda Function ──▶ Lambda Wait ──▶ Function URL
-            │                                    │                    │
+           ├─▶ CodeBuild Project ──▶ CodeBuild Build ──▶ Lambda Function ──▶ Lambda Wait ──▶ Function URL
+           │                                    │                    │
 S3 Source ─┘                                    │                    │
-                                                 │                    │
+                                                │                    │
                                     Captures image digest      Verifies deployment
 ```
 
@@ -225,11 +225,13 @@ After deployment, these values are exported:
 - `codebuild_run_id`: CodeBuild build execution ID
 
 View all outputs:
+
 ```bash
 pulumi stack output
 ```
 
 Get specific output:
+
 ```bash
 pulumi stack output function_url
 ```
@@ -259,6 +261,7 @@ cd infrastructure
 ```
 
 The `deploy.sh` script:
+
 - Checks prerequisites (Pulumi, AWS CLI, credentials)
 - Runs `pulumi up`
 - Retrieves function URL
@@ -289,6 +292,7 @@ pulumi up --yes
 ### CodeBuild Failures
 
 If CodeBuild fails, the `codebuild-runner-with-digest.sh` script provides:
+
 - Key error summary extraction
 - Docker-specific error analysis
 - Dependency and package error detection
@@ -297,6 +301,7 @@ If CodeBuild fails, the `codebuild-runner-with-digest.sh` script provides:
 - Manual log analysis commands
 
 View CloudWatch logs:
+
 ```bash
 PROJECT=$(pulumi stack output codebuild_project_name)
 aws logs tail "/aws/codebuild/$PROJECT" --follow --no-cli-pager
@@ -305,6 +310,7 @@ aws logs tail "/aws/codebuild/$PROJECT" --follow --no-cli-pager
 ### Lambda Not Updating
 
 If Lambda doesn't update after deployment:
+
 1. Check if image digest was captured: `cat /tmp/image_uri_digest.txt`
 2. Verify Lambda is using new image: `aws lambda get-function --function-name $(pulumi stack output lambda_function_name) --query 'Code.ImageUri' --no-cli-pager`
 3. Force rebuild: `pulumi up --replace urn:pulumi:...:lambda:Function::knock-lambda`
@@ -312,6 +318,7 @@ If Lambda doesn't update after deployment:
 ### Device Credential Issues
 
 If hitting Adobe device limits:
+
 ```bash
 BUCKET=$(pulumi stack output device_credentials_bucket)
 aws s3 rm s3://$BUCKET/credentials/ --recursive --no-cli-pager
