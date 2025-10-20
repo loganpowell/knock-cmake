@@ -281,6 +281,65 @@ def sync_device_credentials_to_s3():
         print(f"Error syncing device credentials to S3: {e}")
 
 
+def _find_param_by_pattern(body: Dict[str, Any], *patterns: str) -> Optional[Any]:
+    """Find a parameter value by matching keys against patterns (case-insensitive).
+    
+    Args:
+        body: Request body dictionary
+        patterns: One or more substring patterns to match (all must be present)
+    
+    Returns:
+        The first matching value found, or None
+    """
+    patterns_lower = [p.lower() for p in patterns]
+    for key, value in body.items():
+        key_lower = key.lower()
+        if all(pattern in key_lower for pattern in patterns_lower):
+            return value
+    return None
+
+
+def _sanitize_key_component(name: str) -> str:
+    """Sanitize a filename component for safe S3 key usage."""
+    import re
+    # Replace path separators and control chars
+    name = re.sub(r"[\r\n\t\\/]+", "_", name)
+    # Allow alphanum, dash, underscore, dot, and space -> convert spaces to underscores
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+    # Collapse repeated underscores
+    name = re.sub(r"_+", "_", name).strip("._-")
+    return name[:200] if name else "input"
+
+
+def _derive_acsm_filename(body: Dict[str, Any], acsm_url: Optional[str]) -> str:
+    """Determine the original ACSM filename from the request body."""
+    from urllib.parse import urlparse, unquote
+    # Prefer explicit filename if provided (keys containing "acsm" and "filename" or "name")
+    explicit = _find_param_by_pattern(body, "acsm", "filename") or _find_param_by_pattern(body, "acsm", "name")
+    # Also check for standalone "filename" parameter
+    if not explicit:
+        explicit = body.get("filename") or body.get("Filename") or body.get("fileName")
+    if isinstance(explicit, str) and explicit.strip():
+        fname = explicit.strip()
+    else:
+        fname = "input.acsm"
+        if isinstance(acsm_url, str) and acsm_url:
+            try:
+                path = urlparse(acsm_url).path
+                candidate = os.path.basename(path)
+                if candidate:
+                    fname = unquote(candidate)
+                    # Ensure it ends with .acsm for clarity
+                    if not fname.lower().endswith(".acsm"):
+                        fname = f"{fname}.acsm"
+            except Exception:
+                pass
+    # Final sanitize
+    base, ext = os.path.splitext(fname)
+    base = _sanitize_key_component(base or "input")
+    ext = ".acsm"
+    return f"{base}{ext}"
+
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -315,15 +374,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body = event or {}
 
         # Validate required parameters before any heavy work
-        acsm_url = body.get("acsm_url")
-        acsm_content = body.get("acsm_content")
+        # Look for keys containing "acsm" and "url" or "acsm" and "content"
+        acsm_url = _find_param_by_pattern(body, "acsm", "url")
+        acsm_content = _find_param_by_pattern(body, "acsm", "content")
+        
         if not acsm_url and not acsm_content:
             return {
                 "statusCode": 400,
+                "headers": {"Content-Type": "application/json"},
                 "body": json.dumps(
-                    {"error": "Either acsm_url or acsm_content is required"}
+                    {"error": "Either a parameter containing 'acsm' and 'url' or 'acsm' and 'content' is required"}
                 ),
             }
+
+        # Derive original ACSM filename and base
+        original_acsm_filename = _derive_acsm_filename(body, acsm_url)
+        original_base = os.path.splitext(original_acsm_filename)[0]
+        logger.info(f"Original ACSM filename (derived): {original_acsm_filename}")
 
         # Ensure device credentials are available only after input validation
         credentials_exist = sync_device_credentials_from_s3()
@@ -332,6 +399,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not activate_device_with_adept():
                 return {
                     "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({
                         "error": "Failed to activate device. Could not generate credentials."
                     })
@@ -353,6 +421,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 except urllib.error.URLError as e:
                     return {
                         "statusCode": 400,
+                        "headers": {"Content-Type": "application/json"},
                         "body": json.dumps(
                             {"error": f"Failed to download ACSM file: {str(e)}"}
                         ),
@@ -365,6 +434,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     return {
                         "statusCode": 400,
+                        "headers": {"Content-Type": "application/json"},
                         "body": json.dumps({"error": "ACSM content is empty"}),
                     }
 
@@ -376,6 +446,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not os.path.exists(knock_binary):
                 return {
                     "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
                     "body": json.dumps(
                         {"error": "Knock binary not found at expected location"}
                     ),
@@ -418,6 +489,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except subprocess.TimeoutExpired:
                 return {
                     "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
                     "body": json.dumps(
                         {"error": "Knock conversion timed out after 10 minutes"}
                     ),
@@ -426,6 +498,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if result.returncode != 0:
                 return {
                     "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
                     "body": json.dumps(
                         {
                             "error": "Knock conversion failed",
@@ -439,10 +512,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Handle output files
             output_bucket = os.environ.get("OUTPUT_BUCKET")
             if output_bucket:
-                return _handle_s3_output(tmp_dir, output_bucket, result.stdout)
+                return _handle_s3_output(tmp_dir, output_bucket, result.stdout, original_base, original_acsm_filename)
             else:
                 return {
                     "statusCode": 200,
+                    "headers": {"Content-Type": "application/json"},
                     "body": json.dumps(
                         {"message": "Conversion successful", "stdout": result.stdout}
                     ),
@@ -459,6 +533,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         return {
             "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps(
                 {
                     "error": f"Unexpected error: {str(e)}",
@@ -469,14 +544,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
 
-def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str) -> Dict[str, Any]:
+def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str, original_base: str, original_acsm_filename: str) -> Dict[str, Any]:
     """
-    Handle uploading converted files to S3.
+    Handle uploading converted files to S3, preserving the original ACSM filename base.
 
     Args:
         tmp_dir: Temporary directory containing converted files
         output_bucket: S3 bucket name for output
         stdout: Standard output from Knock conversion
+        original_base: Base name (without extension) derived from input ACSM
+        original_acsm_filename: Original ACSM filename (sanitized) for response context
 
     Returns:
         Dict containing response with S3 file information
@@ -488,7 +565,8 @@ def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str) -> Dict[str
         # Find generated files (PDF/EPUB)
         for file_path in Path(tmp_dir).glob("*"):
             if file_path.suffix.lower() in [".pdf", ".epub"] and file_path.is_file():
-                key = f"converted/{file_path.name}"
+                key_filename = f"{_sanitize_key_component(original_base)}{file_path.suffix.lower()}"
+                key = f"converted/{key_filename}"
                 s3.upload_file(str(file_path), output_bucket, key)
                 
                 # Generate presigned URL (valid for 1 hour)
@@ -500,21 +578,24 @@ def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str) -> Dict[str
                 
                 output_files.append(
                     {
-                        "filename": file_path.name,
+                        "filename": key_filename,
                         "s3_key": key,
                         "download_url": presigned_url,
                         "size_bytes": file_path.stat().st_size,
+                        "source_acsm_filename": original_acsm_filename,
                     }
                 )
 
         return {
             "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps(
                 {
                     "message": "Conversion successful",
                     "output_files": output_files,
                     "files_count": len(output_files),
                     "stdout": stdout,
+                    "source_acsm_filename": original_acsm_filename,
                 }
             ),
         }
@@ -522,6 +603,7 @@ def _handle_s3_output(tmp_dir: str, output_bucket: str, stdout: str) -> Dict[str
     except Exception as e:
         return {
             "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps(
                 {"error": f"Failed to upload files to S3: {str(e)}", "stdout": stdout}
             ),

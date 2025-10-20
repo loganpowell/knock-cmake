@@ -58,14 +58,17 @@ class TestLambdaACSM:
     """ACSM content processing tests."""
     
     @pytest.mark.real_acsm
-    def test_acsm_content_upload(self, function_url: str, acsm_content: str, results_dir: Path):
+    def test_acsm_content_upload(self, function_url: str, acsm_content: str, acsm_file: Path, results_dir: Path):
         """Test ACSM content upload and processing.
         
         WARNING: This test uses the real ACSM file which has limited downloads.
         Run with: pytest tests/test_lambda.py::TestLambdaACSM::test_acsm_content_upload -v
         Skip with: pytest tests/ -m "not real_acsm"
         """
-        payload = {"acsm_content": acsm_content}
+        payload = {
+            "acsm_content": acsm_content,
+            "filename": acsm_file.name
+        }
         
         response = requests.post(
             function_url,
