@@ -143,9 +143,10 @@ DEBUG=1 source platform-compat.sh
 
 Currently, these scripts source the compatibility layer:
 
-- `lambda-wait.sh` - Lambda deployment verification
-- `deploy.sh` - One-command deployment wrapper
-- Add new scripts here as they're updated
+- **`lambda-wait.sh`** - Lambda deployment verification (uses `get_last_line`, `all_but_last_line`)
+- **`deploy.sh`** - One-command deployment wrapper (uses `get_last_line`, `all_but_last_line`)
+
+**Note**: `codebuild-runner-with-digest.sh` does not use this layer because it executes within AWS CodeBuild (always Linux), so platform compatibility is not needed.
 
 ## Contributing
 

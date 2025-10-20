@@ -1,3 +1,9 @@
+# Project Planning & Architecture Notes
+
+> **⚠️ ARCHIVED DOCUMENT**: This file contains the original project planning and architecture notes. For current implementation details, see [README.md](README.md) and [infrastructure/README.md](infrastructure/README.md).
+
+## Original Goal
+
 The goal of this project is to provide a serverless function that can process Knock files using C++ code packaged in a Lambda container image. The infrastructure is defined using Pulumi and deployed to AWS.
 
 This is a container lambda that takes an .acsm file, which is an Adobe Content Server Message file, which contains a reference to an eBook or PDF protected by Adobe DRM, and processes it to produce a DRM-free PDF.

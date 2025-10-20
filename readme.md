@@ -1,55 +1,279 @@
-# Knock-CMake
+# Knock Lambda
 
-Knock-CMake is a project that allows the compilation of Knock using CMake on any Linux OS (or Windows WSL) with various processor architectures. 
+**A serverless AWS Lambda function for converting Adobe ACSM files to DRM-free PDF/EPUB ebooks.**
 
-Knock can Convert ACSM files to PDF/EPUBs with one command on Linux.
+This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM-to-ebook converter as a container-based AWS Lambda function with automated deployment via Pulumi. It provides an HTTP API endpoint for converting ACSM files without requiring local installation of Adobe Digital Editions or Wine.
 
-*This software does not utilize Adobe Digital Editions nor Wine. It is completely free and open-source software written natively for Linux.*
+## 🚀 What It Does
 
-This is a special build script for knock utilizing CMake instead of Nix for better compability. You can find the original knock repository here: [https://github.com/BentonEdmondson/knock](https://github.com/BentonEdmondson/knock). Special thanks to Benton Edmondson and all the other knock contributors.
+- **Input**: ACSM file (Adobe Content Server Message) via HTTP POST request
+- **Output**: DRM-free PDF or EPUB file stored in S3 with a pre-signed download URL
+- **Runtime**: Serverless AWS Lambda with container image deployment
+- **Build**: Automated via AWS CodeBuild (no local Docker required)
 
-**As of Febebury 8th, 2025. The upstream knock repo is currently offline, the build scripts provided here is configured to use a [fork of knock](https://github.com/Alvin-He/knock-cmake/tree/knock-base-release-79).**
+## 📋 Table of Contents
 
-## Installation
+- [Quick Start](#-quick-start)
+- [Architecture](#-architecture)
+- [Documentation](#-documentation)
+- [Project Structure](#-project-structure)
+- [Development](#-development)
+- [Testing](#-testing)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-NOTE: For x86-64 users, you may simply go to the [knock repository's release page](https://github.com/BentonEdmondson/knock/releases) to download a binary. The binary published by the upstream knock repository does not require any of the runtime dependencies here.
+## 🎯 Quick Start
 
-1. Get to [releases](https://github.com/Alvin-He/knock-cmake/knock/releases) to get the latest release or clone this repo for the most up to date code.
-    - *if older knock releases is needed, this repository's release version numbers should match up with the [upstream Knock repository's release page.](https://github.com/BentonEdmondson/knock/releases)*
-2. Navigate to the folder that `knock-cmake` is installed in
-3. If `apt` is your OS's package manager, then you may simply run `sudo python3 build.py` to build and install knock-cmake (this will take some time) 
-    - if you are not using `apt`, then to go to [Dependencies](#dependencies) and install those manually using your package manager of choice, then run `python3 build.py` as normal
-    - the error messages will provide you enough details to resolve any problems with installation, if not, create an [issue](https://github.com/Alvin-He/knock-cmake/issues/new)
-    - if for some reason python3 can't be used, open `build.py`, go to the end of the file, and follow instructions there. 
-4. `build.py` will generate the knock binary in `<knock-cmake download folder>/knock`. `cd`/navigate to that folder.
-5. Then run `./knock ./path/to/book.acsm` to perform the conversion.
-6. To clean up, move the knock binary to some other location, ex: your home directory or `~/`. ***MAKE SURE YOU HAVE MOVED THE KNOCK BINARY***; then run `sudo rm -r knock-cmake` to remove all the build artifacts. 
-7. Optional: move the knock binary to `/usr/local/bin` if you want to be able to run knock from anywhere.
+### Prerequisites
 
-## Dependencies
+- [uv](https://docs.astral.sh/uv/) - Python package manager
+- [Pulumi](https://www.pulumi.com/docs/get-started/install/) - Infrastructure as Code
+- AWS CLI configured with appropriate credentials
+- **Note**: Docker is NOT required locally - builds happen in AWS CodeBuild
 
-Knock-cmake requires `libssl-dev, libcurl4-openssl-dev, zlib1g-dev, git, cmake, build-essential`(gcc, g++, etc.) in order to be built.
+### Deploy to AWS
 
-The then compiled binary needs libcurl, libopenssl and zlib as run time dependencies if you are planning to deploy it somewhere.
+```bash
+# 1. Clone the repository
+git clone <repo-url>
+cd knock-lambda
 
-**NOTE: the version of knock published by the [upstream knock repository](https://github.com/BentonEdmondson/knock/) will run with out these dependencies, but this version of knock built by knock-cmake will NOT!**
+# 2. Install dependencies
+uv sync
 
-## Contributing
+# 3. Activate environment
+uv shell
 
-If you have anything to add or want to optimize any of my cmake scripts, feel free to do so and open a pull request. 
+# 4. Navigate to infrastructure and deploy
+cd infrastructure
+pulumi up
+```
 
-There are no particular formatting guides, just if your code is not self-explanatory, add comments.
+After deployment, you'll receive a Lambda function URL for making conversion requests.
 
-## License
+### Use the API
 
-This repository is licensed under GPLv3. Knock is also licensed under GPLv3. The linked libraries have various licenses.
+```bash
+# Convert an ACSM file
+curl -X POST https://your-lambda-url.lambda-url.us-east-1.on.aws/ \
+  -H "Content-Type: application/json" \
+  -d '{"acsm_content": "<ACSM file content>"}'
 
-## Motivation
-Knock have always been my go to converter when I need to convert acsm ebook files to epub for easier reading and portability. Knock is great at this, but it is very inconvenient to have to start my linux machine every time I need to convert an ebook (My linux laptop isn't my main computer). Due to my unmatched laziness, I decided to make a web interface for knock so I don't have to always bother my self. However, the upstream knock repo only published a x86-64 kernel and wouldn't you know it, most web server are arm64.... :(. Soooooooo, why not make some cmake build files for knock. Wouldn't be too hard. Right? 
+# Response includes S3 download URL for converted file
+```
 
-NO. I proceeded to take 4 days of my life making these for knock and the library it uses, [libgourou](https://forge.soutade.fr/soutade/libgourou) (also had to make libgourou's dependency [uPDFParser](https://forge.soutade.fr/soutade/uPDFParser) a cmake script too) (These 2 are very good libraries made by [soutade](https://forge.soutade.fr/soutade/), check them out!). Anyways, now that the CMake scripts exist, I will finally be able to make that web interface. I know there are web acsm to epub converters that exist already, but the ones I can find all seem broken. So when ever I finishes, I guess I will update here. 
+See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for complete API documentation.
 
-I'll try my best to keep up with the upstream repo's updates. If you need an update before I update this repo for some reason, then just change the tags and commit hashes in get_git_repo calls in build.py for newer ones.  
+## 🏗 Architecture
 
-If you need cmake scripts for libgourou or cmake scripts for uPDFParser, you can just download the scripts in /config. They should work standalone. 
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Client    │────▶│    Lambda    │────▶│  S3 Output  │
+│  (HTTP)     │     │  (Container) │     │   Bucket    │
+└─────────────┘     └──────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │   Knock C++  │
+                    │    Binary    │
+                    └──────────────┘
+```
+
+**Key Components:**
+
+- **AWS Lambda**: Container-based function with Knock binary and Python handler
+- **AWS CodeBuild**: Builds Docker images from source (no local Docker needed)
+- **AWS ECR**: Stores container images
+- **AWS S3**: Storage for output files and device credentials
+- **Pulumi**: Infrastructure as Code for automated deployment
+
+**Build Process:**
+
+1. C++ dependencies (libgourou, uPDFParser) are pre-extracted in `deps/` directory
+2. CMake builds static Knock binary from source
+3. Docker packages binary with Lambda Python runtime
+4. CodeBuild pushes image to ECR
+5. Lambda function deployed with container image
+
+## 📚 Documentation
+
+### Infrastructure & Deployment
+
+- **[infrastructure/README.md](infrastructure/README.md)** - Complete deployment guide with Pulumi setup
+- **[infrastructure/CONFIG.md](infrastructure/CONFIG.md)** - Configuration options (timeouts, memory, regions)
+- **[infrastructure/lambda/README.md](infrastructure/lambda/README.md)** - Lambda API reference and handler details
+- **[infrastructure/PLATFORM_COMPAT.md](infrastructure/PLATFORM_COMPAT.md)** - Cross-platform shell scripting utilities
+
+### Build System
+
+- **[SIMPLIFIED_BUILD.md](SIMPLIFIED_BUILD.md)** - Overview of the simplified local dependency build system
+- **[build_container.py](build_container.py)** - Python script for building Knock binary locally
+- **[CMakeLists.txt](CMakeLists.txt)** - Top-level CMake build configuration
+
+### Testing
+
+- **[tests/QUICK_START.md](tests/QUICK_START.md)** - Run tests in under 1 minute
+- **[tests/TEST_GUIDE.md](tests/TEST_GUIDE.md)** - Complete pytest testing guide
+- **[tests/README.md](tests/README.md)** - Legacy shell-based test documentation
+
+### Dependencies
+
+- **[deps/libgourou/README.md](deps/libgourou/README.md)** - Adobe ADEPT DRM processing library
+- **[deps/uPDFParser/README.md](deps/uPDFParser/README.md)** - PDF parsing library
+
+### Troubleshooting
+
+- **[docs/ACSM_DEVICE_LIMITS.md](docs/ACSM_DEVICE_LIMITS.md)** - Understanding and resolving device limit errors
+
+### Project Planning
+
+- **[instructions.md](instructions.md)** - Original project architecture and planning notes (archived)
+- **[WARP.md](WARP.md)** - AI assistant context and development guidelines
+
+## 📁 Project Structure
+
+```
+knock-lambda/
+├── infrastructure/          # Pulumi infrastructure code
+│   ├── __main__.py         # Main infrastructure definition
+│   ├── lambda/             # Lambda function code
+│   │   ├── handler.py      # Python Lambda handler
+│   │   └── Dockerfile      # Container image definition
+│   ├── README.md           # Deployment documentation
+│   └── CONFIG.md           # Configuration options
+├── deps/                    # Local C++ dependencies (committed)
+│   ├── libgourou/          # Adobe DRM library
+│   └── uPDFParser/         # PDF parser
+├── knock/                   # Knock application source
+│   ├── src/knock.cpp       # Main C++ implementation
+│   └── CMakeLists.txt
+├── config/                  # CMake build configurations
+├── assets/                  # Source tarballs for dependencies
+├── tests/                   # Test suite (pytest + shell scripts)
+├── docs/                    # Additional documentation
+├── build_container.py       # Local build script
+├── CMakeLists.txt          # Top-level CMake config
+├── pyproject.toml          # Python project configuration
+└── README.md               # This file
+```
+
+## 🛠 Development
+
+### Local Build
+
+Build the Knock binary locally for testing:
+
+```bash
+# Build using the container build script
+python3 build_container.py
+
+# Binary output location
+./build-output/knock
+```
+
+See [SIMPLIFIED_BUILD.md](SIMPLIFIED_BUILD.md) for build system details.
+
+### Docker Build
+
+Test the Lambda container locally:
+
+```bash
+# Build container image
+docker build -f infrastructure/lambda/Dockerfile -t knock-lambda .
+
+# Run container locally (basic test)
+docker run --rm knock-lambda
+```
+
+### Infrastructure Updates
+
+```bash
+cd infrastructure
+
+# Preview changes
+pulumi preview
+
+# Deploy changes
+pulumi up
+
+# View outputs
+pulumi stack output
+```
+
+### Testing
+
+```bash
+# Install test dependencies
+uv pip install -e ".[dev]"
+
+# Run safe tests (no real ACSM processing)
+pytest tests/ -m "not real_acsm"
+
+# Run all tests
+pytest tests/
+```
+
+See [tests/QUICK_START.md](tests/QUICK_START.md) for testing guide.
+
+## 🧪 Testing
+
+This project includes comprehensive pytest-based tests:
+
+- **Basic Tests**: Health checks, connectivity, parameter validation
+- **ACSM Processing**: Actual file conversion (marked with `@pytest.mark.real_acsm`)
+- **Load Tests**: Concurrent requests, memory stress, performance
+- **Error Handling**: Invalid inputs, malformed JSON, HTTP methods
+
+**Quick Test:**
+
+```bash
+# Run all tests except real ACSM processing (recommended)
+pytest tests/ -m "not real_acsm"
+```
+
+⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota.
+
+See complete testing documentation:
+- [tests/QUICK_START.md](tests/QUICK_START.md) - Get started in 1 minute
+- [tests/TEST_GUIDE.md](tests/TEST_GUIDE.md) - Complete pytest guide
+- [tests/README.md](tests/README.md) - Shell script tests (legacy)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Run the test suite
+5. Submit a pull request
+
+**Development Guidelines:**
+
+- Follow existing code style (Black for Python, comments for C++)
+- Update documentation for user-facing changes
+- Add tests for bug fixes and new features
+- Test on both macOS and Linux when possible
+
+## 📄 License
+
+This project is licensed under GPLv3. The Knock application and its dependencies have the following licenses:
+
+- **knock**: GPLv3
+- **libgourou**: LGPL v3 or later
+- **uPDFParser**: LGPL v3 or later
+
+## 🙏 Credits
+
+- **[Knock](https://github.com/BentonEdmondson/knock)** by Benton Edmondson - Original ACSM converter
+- **[libgourou](https://forge.soutade.fr/soutade/libgourou)** by Grégory Soutadé - Adobe ADEPT implementation
+- **[uPDFParser](https://forge.soutade.fr/soutade/uPDFParser)** by Grégory Soutadé - PDF parsing library
+- **[knock-cmake](https://github.com/Alvin-He/knock-cmake)** by Alvin He - CMake build system
+
+## 🔗 Links
+
+- [AWS Lambda Documentation](https://docs.aws.amazon.com/lambda/)
+- [Pulumi Documentation](https://www.pulumi.com/docs/)
+- [Knock Original Repository](https://github.com/BentonEdmondson/knock) (currently offline)
+- [Adobe ADEPT Protocol](https://www.adobe.com/solutions/ebook/digital-editions.html)
 
