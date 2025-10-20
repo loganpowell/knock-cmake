@@ -25,7 +25,7 @@ pulumi config set lambda_memory 2048
 ### Lambda Configuration
 
 - `lambda_timeout` - Lambda timeout in seconds (default: 900 = 15 minutes, max: 900)
-- `lambda_memory` - Lambda memory in MB (default: 10240 = 10GB, maximum available)
+- `lambda_memory` - Lambda memory in MB (default: 1024 = 1GB)
 - `lambda_log_retention` - CloudWatch log retention days (default: 14)
 
 ### S3 Configuration
@@ -58,7 +58,7 @@ Example `Pulumi.prod.yaml`:
 config:
   aws:region: us-west-2
   knock-lambda:lambda_timeout: 600  # 10 minutes
-  knock-lambda:lambda_memory: 5120  # 5GB
+  knock-lambda:lambda_memory: 2048  # 2GB (if needed for large files)
   knock-lambda:lambda_log_retention: 30  # 30 days
   knock-lambda:output_bucket_lifecycle_days: 7  # Keep files for 1 week
   knock-lambda:ecr_image_retention: 10  # Keep 10 images
@@ -100,17 +100,19 @@ Common regions:
 
 The Lambda memory setting affects both RAM and CPU allocation:
 
-- **Default (10240 MB)**: Maximum memory, best performance for large ebooks
-- **5120 MB (5 GB)**: Good balance of cost and performance
-- **3008 MB (3 GB)**: Minimum recommended for ebook processing
+- **Default (1024 MB / 1GB)**: Sufficient for typical ACSM file processing
+- **2048 MB (2 GB)**: For larger ebooks or faster processing
+- **512 MB**: Minimum, may be slower but more cost-effective
+
+**Note**: Lambda CPU is proportional to memory. Higher memory = faster CPU.
 
 ### Lambda Timeout
 
 Processing time varies by ebook size and complexity:
 
-- **Default (900s / 15 min)**: Maximum timeout, handles large files
-- **600s (10 min)**: Suitable for most ebooks
-- **300s (5 min)**: Fast processing, may timeout on large files
+- **Default (900s / 15 min)**: Maximum timeout, handles all cases
+- **300s (5 min)**: Sufficient for most ebooks
+- **120s (2 min)**: Fast processing, suitable for typical files
 
 ### CodeBuild Configuration
 

@@ -31,7 +31,7 @@ AWS_REGION = aws_config.get("region") or config.get("aws_region") or "us-east-2"
 
 # Lambda Configuration
 LAMBDA_TIMEOUT = config.get_int("lambda_timeout") or 900  # 15 minutes
-LAMBDA_MEMORY = config.get_int("lambda_memory") or 10240  # Maximum memory (10GB)
+LAMBDA_MEMORY = config.get_int("lambda_memory") or 1024  # 1GB (sufficient for ACSM processing)
 LAMBDA_RETENTION_DAYS = config.get_int("lambda_log_retention") or 14
 
 # S3 Configuration

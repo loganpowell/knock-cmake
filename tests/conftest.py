@@ -83,7 +83,7 @@ def function_url(project_root: Path) -> str:
 @pytest.fixture
 def acsm_file(assets_dir: Path) -> Path:
     """Get the test ACSM file path."""
-    acsm_path = assets_dir / "Philosophical_Writings_of_Peirce-epub.acsm"
+    acsm_path = assets_dir / "Designing_Your_Life-epub.acsm"
     if not acsm_path.exists():
         pytest.skip(f"ACSM test file not found: {acsm_path}")
     return acsm_path
