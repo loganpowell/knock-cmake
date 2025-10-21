@@ -112,6 +112,7 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 
 ### Testing
 
+- **[tests/INTERACTIVE_CLI.md](tests/INTERACTIVE_CLI.md)** - Interactive test CLI with menu-driven ACSM file selection (`uv run itest`)
 - **[tests/QUICK_START.md](tests/QUICK_START.md)** - Run tests in under 1 minute
 - **[tests/TEST_GUIDE.md](tests/TEST_GUIDE.md)** - Complete pytest testing guide
 - **[tests/README.md](tests/README.md)** - Legacy shell-based test documentation

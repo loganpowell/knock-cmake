@@ -1,7 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "🔄 Resetting Device Credentials"
+# Load platform compatibility layer
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/platform-compat.sh"
+
+log_info "Resetting Device Credentials"
 echo "================================="
 echo ""
 echo "This will clear the existing Adobe device credentials from S3"
@@ -9,7 +14,7 @@ echo "and force the Lambda to generate fresh credentials on the next run."
 echo ""
 
 # Get the device credentials bucket name from Pulumi
-echo "📦 Getting bucket name from Pulumi..."
+log_info "Getting bucket name from Pulumi..."
 BUCKET_NAME=$(cd infrastructure && pulumi stack output device_credentials_bucket 2>/dev/null)
 
 if [ -z "$BUCKET_NAME" ]; then

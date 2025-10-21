@@ -1,20 +1,92 @@
-# Docker ignore file - less restrictive than .gitignore for build purposes
-.vscode
+# Docker ignore file - excludes unnecessary files from build context
+# This reduces the size of the context sent to Docker daemon
+
+# Version control
 .git
-tests/.env
-build-output
-~build
-~checkout
+.gitignore
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Python cache and virtual environments
 __pycache__
-.venv/
 *.pyc
-.DS_Store
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment files
+.env
+tests/.env
+infrastructure/.env
+
+# Build artifacts (the large 67M directory!)
+build/
+build-output/
+~build/
+~checkout/
+
+# Test files and directories (not needed in container)
+tests/
+pytest.ini
+.coverage
+htmlcov/
+.tox/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!infrastructure/lambda/README.md
+
+# Scripts (not needed in container)
+scripts/
 
 # Infrastructure files (not needed in build container)
 infrastructure/Pulumi*
 infrastructure/__pycache__
-infrastructure/.env
-infrastructure/*.sh
+infrastructure/*.py
+infrastructure/shell/
+infrastructure/lambda/__pycache__/
+!infrastructure/lambda/handler.py
+!infrastructure/lambda/requirements.txt
+!infrastructure/lambda/Dockerfile
 
-# Note: deps/ is included - contains local source dependencies
-# Note: assets/sources/ is included - contains source tarballs
+# Pulumi and deployment files
+Pulumi.yaml
+Pulumi.*.yaml
+uv.lock
+pyproject.toml
+
+# Assets that aren't needed for build
+assets/Beeswax_Alchemy-epub.acsm
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+/tmp/
+
+# Note: The following ARE included (needed for build):
+# - deps/ (contains local source dependencies)
+# - knock/ (contains knock source code)
+# - CMakeLists.txt (build configuration)
+# - build_container.py (build script)
+# - infrastructure/lambda/handler.py (Lambda function code)
+# - infrastructure/lambda/requirements.txt (Python dependencies)
+

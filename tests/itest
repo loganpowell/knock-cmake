@@ -1,0 +1,15 @@
+#!/bin/bash
+# Interactive test CLI launcher for Knock Lambda
+# Ensures the script runs with the correct Python environment
+
+set -e
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
+# Run with uv to use the virtual environment
+exec uv run python3 tests/interactive_test.py "$@"

@@ -1,8 +1,0 @@
-#!/bin/bash
-# Pulumi wrapper script to run commands from the infrastructure directory
-
-# Get the directory containing this script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-
-# Change to infrastructure directory and run pulumi
-cd "$SCRIPT_DIR/infrastructure" && exec pulumi "$@"

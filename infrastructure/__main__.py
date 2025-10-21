@@ -10,7 +10,12 @@ The infrastructure includes:
 - IAM roles and policies for proper access control
 """
 
+# Read the image digest from the build output
+# Use a cross-platform approach to find the temp file
+import tempfile
 import os
+import shutil
+import yaml
 import json
 import pulumi
 import pulumi_aws as aws
@@ -32,12 +37,56 @@ from config import (
 )
 
 
+def get_shell_command():
+    """
+    Detect the appropriate shell for executing scripts in a cross-platform way.
+
+    Returns:
+        str: The shell command to use ('bash', 'sh', or 'C:\\Program Files\\Git\\bin\\bash.exe')
+
+    Priority:
+    1. bash (most common on Unix/Linux/macOS and Git Bash on Windows)
+    2. sh (POSIX shell, widely available)
+    3. Git Bash on Windows (C:\\Program Files\\Git\\bin\\bash.exe)
+
+    Raises:
+        RuntimeError: If no compatible shell is found
+    """
+    # Try to find bash first (preferred)
+    bash_path = shutil.which("bash")
+    if bash_path:
+        return bash_path
+
+    # Fall back to sh (POSIX shell)
+    sh_path = shutil.which("sh")
+    if sh_path:
+        return sh_path
+
+    # On Windows, try common Git Bash locations
+    if os.name == "nt":
+        git_bash_paths = [
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files (x86)\Git\bin\bash.exe",
+            os.path.expanduser(r"~\AppData\Local\Programs\Git\bin\bash.exe"),
+        ]
+        for path in git_bash_paths:
+            if os.path.exists(path):
+                return f'"{path}"'  # Quote path for spaces
+
+    raise RuntimeError(
+        "No compatible shell found. Please install bash, sh, or Git for Windows."
+    )
+
+
+# Detect the shell to use at module load time
+SHELL_CMD = get_shell_command()
+
+
 # YAML validation function
 def validate_buildspec_yaml(buildspec_content):
     """Validate buildspec YAML before using it"""
     try:
         # Try to parse as YAML
-        import yaml
 
         parsed = yaml.safe_load(buildspec_content)
 
@@ -84,12 +133,9 @@ def validate_buildspec_yaml(buildspec_content):
 
 def get_validated_buildspec():
     """Load and validate the buildspec YAML from file"""
-    import os
 
     # Path to the buildspec file
-    buildspec_path = os.path.join(
-        os.path.dirname(__file__), "shell_scripts", "buildspec.yml"
-    )
+    buildspec_path = os.path.join(os.path.dirname(__file__), "shell", "buildspec.yml")
 
     try:
         with open(buildspec_path, "r") as f:
@@ -119,28 +165,27 @@ ecr_repo = aws.ecr.Repository(
     force_delete=True,  # Allow repository deletion even with images
 )
 
-json_ecr_lifecycle_policy = json.dumps(
-    {
-        "rules": [
-            {
-                "rulePriority": 1,
-                "description": "Keep last 5 images",
-                "selection": {
-                    "tagStatus": "any",
-                    "countType": "imageCountMoreThan",
-                    "countNumber": ECR_IMAGE_RETENTION_COUNT,
-                },
-                "action": {"type": "expire"},
-            }
-        ]
-    },
-    indent=4,
-)
 # Create ECR lifecycle policy to manage image retention
 ecr_lifecycle_policy = aws.ecr.LifecyclePolicy(
     "knock-repo-lifecycle",
     repository=ecr_repo.name,
-    policy=json_ecr_lifecycle_policy,
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 5 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": ECR_IMAGE_RETENTION_COUNT,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        },
+        indent=4,
+    ),
 )
 
 # Create S3 bucket for source code with unique naming
@@ -198,58 +243,60 @@ codebuild_role = aws.iam.Role(
 )
 
 
-def codebuild_p_json(args) -> str:
-    ecr_repo_arn, source_bucket_arn = args
-    return json.dumps(
-        {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents",
-                    ],
-                    "Resource": "arn:aws:logs:*:*:*",
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "ecr:BatchCheckLayerAvailability",
-                        "ecr:GetDownloadUrlForLayer",
-                        "ecr:BatchGetImage",
-                        "ecr:GetAuthorizationToken",
-                        "ecr:PutImage",
-                        "ecr:InitiateLayerUpload",
-                        "ecr:UploadLayerPart",
-                        "ecr:CompleteLayerUpload",
-                        "ecr:DescribeRepositories",
-                        "ecr:DescribeImages",
-                        "ecr:CreateRepository",
-                    ],
-                    "Resource": "*",
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:GetObjectVersion",
-                        "s3:ListBucket",
-                        "s3:ListBucketVersions",
-                    ],
-                    "Resource": [source_bucket_arn, f"{source_bucket_arn}/*"],
-                },
-            ],
-        }
-    )
-
-
 # Attach policies to CodeBuild role
 codebuild_policy = aws.iam.RolePolicy(
     "codebuild-policy",
     role=codebuild_role.id,
-    policy=pulumi.Output.all(ecr_repo.arn, source_bucket.arn).apply(codebuild_p_json),
+    policy=pulumi.Output.all(ecr_repo.arn, source_bucket.arn).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents",
+                        ],
+                        "Resource": "arn:aws:logs:*:*:*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ecr:GetAuthorizationToken",
+                        ],
+                        "Resource": "*",  # This action requires wildcard
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ecr:BatchCheckLayerAvailability",
+                            "ecr:GetDownloadUrlForLayer",
+                            "ecr:BatchGetImage",
+                            "ecr:PutImage",
+                            "ecr:InitiateLayerUpload",
+                            "ecr:UploadLayerPart",
+                            "ecr:CompleteLayerUpload",
+                            "ecr:DescribeRepositories",
+                            "ecr:DescribeImages",
+                        ],
+                        "Resource": args[0],  # ECR repo ARN
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:ListBucket",
+                            "s3:ListBucketVersions",
+                        ],
+                        "Resource": [args[1], f"{args[1]}/*"],  # Source bucket ARN
+                    },
+                ],
+            }
+        )
+    ),
 )
 
 # CodeBuild Approach - Build and push Docker image using AWS CodeBuild
@@ -305,18 +352,19 @@ codebuild_project = aws.codebuild.Project(
 # Create IAM role for Lambda
 lambda_role = aws.iam.Role(
     "knock-lambda-role",
-    assume_role_policy="""{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
+    assume_role_policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
                 }
-            }
-        ]
-    }""",
+            ],
+        },
+        indent=4,
+    ),
 )
 
 # Attach basic Lambda execution policy
@@ -360,7 +408,7 @@ lambda_s3_policy = aws.iam.RolePolicy(
 build_command = command.local.Command(
     "knock-lambda-build-run",
     create=pulumi.Output.concat(codebuild_project.name).apply(
-        lambda project_name: f"bash shell_scripts/codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
+        lambda project_name: f"{SHELL_CMD} shell/codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
     ),
     triggers=[
         source_object.version_id,
@@ -371,10 +419,16 @@ build_command = command.local.Command(
     ),
 )
 
-# Read the image digest from the build output
+
+def get_temp_file_path():
+    """Get the cross-platform path to the image digest file"""
+    temp_dir = tempfile.gettempdir()
+    return os.path.join(temp_dir, "image_uri_digest.txt")
+
+
 image_digest_command = command.local.Command(
     "get-image-digest",
-    create="cat /tmp/image_uri_digest.txt 2>/dev/null || echo 'digest-not-found'",
+    create=f"cat '{get_temp_file_path()}' 2>/dev/null || echo 'digest-not-found'",
     triggers=[
         source_object.version_id,
         dockerfile_object.version_id,
@@ -421,7 +475,7 @@ lambda_function = aws.lambda_.Function(
 lambda_wait_command = command.local.Command(
     "lambda-wait-active",
     create=pulumi.Output.all(lambda_function.name, image_digest_command.stdout).apply(
-        lambda args: f"bash shell_scripts/lambda-wait.sh '{args[0]}' '{AWS_REGION}' '{args[1].strip()}'"
+        lambda args: f"{SHELL_CMD} shell/lambda-wait.sh '{args[0]}' '{AWS_REGION}' '{args[1].strip()}'"
     ),
     triggers=[
         image_digest_command.stdout,

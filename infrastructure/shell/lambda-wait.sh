@@ -7,7 +7,8 @@ set -e
 
 # Load platform compatibility layer
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/platform-compat.sh"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$PROJECT_ROOT/scripts/platform-compat.sh"
 
 # Configuration
 FUNCTION_NAME="$1"
