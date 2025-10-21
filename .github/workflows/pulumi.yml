@@ -12,7 +12,7 @@ on:
 
 env:
     PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-    PULUMI_CONFIG_PASSPHRASE: ${{ vars.PULUMI_CONFIG_PASSPHRASE }}
+    PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
 jobs:
     preview:
@@ -49,7 +49,7 @@ jobs:
                   echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
             - name: Pulumi Preview
-              uses: pulumi/actions@v5
+              uses: pulumi/actions@v6.6.0
               with:
                   command: preview
                   stack-name: ${{ steps.stack.outputs.stack_name }}
@@ -90,7 +90,7 @@ jobs:
                   echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
             - name: Pulumi Up
-              uses: pulumi/actions@v5
+              uses: pulumi/actions@v6.6.0
               with:
                   command: up
                   stack-name: ${{ steps.stack.outputs.stack_name }}
