@@ -3,6 +3,8 @@
 Interactive CLI for testing Knock Lambda with ACSM files.
 
 This tool provides an interactive menu-driven interface for:
+- Running health checks
+- Testing presigned URL generation (debug mode - no licenses used)
 - Selecting ACSM files from the repository
 - Testing Lambda function with selected files
 - Viewing formatted results
@@ -271,6 +273,98 @@ def test_health_check(function_url: str) -> bool:
         return False
 
 
+def test_presigned_url_debug(function_url: str) -> bool:
+    """
+    Test presigned URL generation using debug mode.
+    Creates a dummy file without using Adobe licenses.
+
+    Args:
+        function_url: Lambda function URL
+
+    Returns:
+        True if test passes
+    """
+    print(f"\n{'='*70}")
+    print("🔧 Presigned URL Debug Test")
+    print(f"{'='*70}\n")
+    print("This test creates a dummy file to validate S3 upload and presigned URLs")
+    print("WITHOUT consuming Adobe licenses.\n")
+
+    payload = {"debug": True, "filename": "Interactive_Debug_Test"}
+
+    try:
+        print("📤 Sending debug request to Lambda...")
+        start_time = time.time()
+        response = requests.post(
+            function_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        elapsed = time.time() - start_time
+
+        print(f"⏱️  Lambda duration: {elapsed:.2f}s")
+        print(f"📊 Status code: {response.status_code}\n")
+
+        if response.status_code != 200:
+            print(f"❌ Lambda returned error status: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+
+        response_data = response.json()
+        print("📋 Lambda Response:")
+        print(json.dumps(response_data, indent=2))
+        print()
+
+        # Try to download the file using the presigned URL
+        if "output_files" in response_data and len(response_data["output_files"]) > 0:
+            output_file = response_data["output_files"][0]
+            download_url = output_file.get("download_url")
+
+            if not download_url:
+                print("❌ No download URL in response")
+                return False
+
+            print(f"🔗 Testing presigned URL download...")
+            print(f"URL (first 80 chars): {download_url[:80]}...\n")
+
+            try:
+                download_start = time.time()
+                download_response = requests.get(download_url, timeout=10)
+                download_elapsed = time.time() - download_start
+
+                if download_response.status_code == 200:
+                    content = download_response.text
+                    print(f"✅ Download successful!")
+                    print(f"⏱️  Download duration: {download_elapsed:.2f}s")
+                    print(f"📦 Content size: {len(content)} bytes")
+                    print(f"\n📄 File content:")
+                    print("─" * 70)
+                    print(content)
+                    print("─" * 70)
+                    print("\n✅ Presigned URL test PASSED!\n")
+                    return True
+                else:
+                    print(f"❌ Download failed with HTTP {download_response.status_code}")
+                    print(f"Error: {download_response.reason}")
+                    print(f"\n📄 Error details:")
+                    print(download_response.text[:1000])  # First 1000 chars of error
+                    return False
+
+            except Exception as e:
+                print(f"❌ Download request failed: {e}")
+                print(f"Exception type: {type(e).__name__}")
+                return False
+        else:
+            print("❌ No output files in response")
+            return False
+
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        print(f"Exception type: {type(e).__name__}")
+        return False
+
+
 def main():
     """Main interactive CLI."""
     project_root = Path(__file__).parent.parent
@@ -310,7 +404,8 @@ def main():
                 message="What would you like to do?",
                 choices=[
                     ("🏥 Run health check", "health"),
-                    ("📂 Test single ACSM file", "single"),
+                    ("� Test presigned URL (debug mode)", "debug_presigned_url"),
+                    ("�📂 Test single ACSM file", "single"),
                     ("📚 Test all ACSM files", "all"),
                     ("🔄 Test multiple files (select)", "multiple"),
                     ("🔍 View file content", "view"),
@@ -329,6 +424,10 @@ def main():
 
         if action == "health":
             test_health_check(function_url)
+            input("\nPress Enter to continue...")
+
+        elif action == "debug_presigned_url":
+            test_presigned_url_debug(function_url)
             input("\nPress Enter to continue...")
 
         elif action == "single":

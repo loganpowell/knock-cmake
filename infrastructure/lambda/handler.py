@@ -14,6 +14,7 @@ import tempfile
 
 import boto3
 from botocore.exceptions import ClientError
+from botocore.config import Config
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 import urllib.request
@@ -519,7 +520,57 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Direct invocation or already-parsed event
             body = event or {}
 
-        # Validate required parameters before any heavy work
+        logger.info(f"📦 Parsed request body: {json.dumps(body, indent=2)}")
+
+        # Check for debug mode FIRST - creates a dummy file to test S3 upload and presigned URLs
+        # In debug mode, we bypass all ACSM parameter validation
+        debug_mode = (
+            body.get("debug") or body.get("test_mode") or body.get("debug_mode")
+        )
+        logger.info(f"🔧 Debug mode flag: {debug_mode} (type: {type(debug_mode)})")
+
+        if debug_mode:
+            logger.info("🔧 DEBUG MODE ENABLED - Creating dummy file to test S3 upload")
+            output_bucket = os.environ.get("OUTPUT_BUCKET")
+
+            if not output_bucket:
+                return {
+                    "statusCode": 500,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"error": "OUTPUT_BUCKET not configured"}),
+                }
+
+            # Create a dummy EPUB file
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                test_filename = body.get("filename", "Debug_Test_File")
+                test_base = _sanitize_key_component(test_filename)
+                test_file_path = os.path.join(tmp_dir, f"{test_base}.epub")
+
+                # Create a simple test file with some content
+                with open(test_file_path, "w") as f:
+                    f.write(
+                        "This is a debug test file to validate S3 upload and presigned URL generation.\n"
+                    )
+                    f.write(
+                        f"Generated at: {context.aws_request_id if context else 'N/A'}\n"
+                    )
+                    f.write(
+                        "If you can download this file, the presigned URL is working correctly.\n"
+                    )
+
+                logger.info(f"Created debug file: {test_file_path}")
+                logger.info(f"File size: {os.path.getsize(test_file_path)} bytes")
+
+                # Use the same S3 upload logic as the real conversion
+                return _handle_s3_output(
+                    tmp_dir,
+                    output_bucket,
+                    "Debug mode - no actual conversion performed",
+                    test_base,
+                    f"{test_base}.acsm",
+                )
+
+        # Validate required parameters for normal (non-debug) mode
         # Look for keys containing "acsm" and "url" or "acsm" and "content"
         acsm_url = _find_param_by_pattern(body, "acsm", "url")
         acsm_content = _find_param_by_pattern(body, "acsm", "content")
@@ -826,7 +877,21 @@ def _handle_s3_output(
         Dict containing response with S3 file information
     """
     try:
-        s3 = boto3.client("s3")
+        # Create S3 client with regional endpoint configuration
+        # This ensures presigned URLs use the regional endpoint instead of the global one
+        region = os.environ.get("AWS_REGION", "us-east-2")
+
+        # Configure S3 client to use regional endpoint
+        s3_config = Config(
+            signature_version="s3v4",
+            s3={
+                "addressing_style": "virtual",  # Use virtual-hosted style (bucket.s3.region.amazonaws.com)
+                "use_accelerate_endpoint": False,
+                "payload_signing_enabled": True,
+            },
+        )
+
+        s3 = boto3.client("s3", region_name=region, config=s3_config)
         output_files: List[Dict[str, Union[str, int]]] = []
 
         # Find generated files (PDF/EPUB)
@@ -834,14 +899,45 @@ def _handle_s3_output(
             if file_path.suffix.lower() in [".pdf", ".epub"] and file_path.is_file():
                 key_filename = f"{_sanitize_key_component(original_base)}{file_path.suffix.lower()}"
                 key = f"converted/{key_filename}"
+
+                logger.info(f"Uploading file to S3: {key}")
+                logger.info(f"Bucket: {output_bucket}")
+                logger.info(f"File size: {file_path.stat().st_size} bytes")
+
+                # Upload file without ACL (use bucket default permissions)
                 s3.upload_file(str(file_path), output_bucket, key)
 
-                # Generate presigned URL (valid for 1 hour)
-                presigned_url = s3.generate_presigned_url(
-                    "get_object",
-                    Params={"Bucket": output_bucket, "Key": key},
-                    ExpiresIn=3600,  # 1 hour
-                )
+                logger.info("✓ File uploaded successfully")
+
+                # Generate presigned URL with explicit parameters
+                try:
+                    logger.info("Generating presigned URL...")
+
+                    presigned_url = s3.generate_presigned_url(
+                        ClientMethod="get_object",
+                        Params={
+                            "Bucket": output_bucket,
+                            "Key": key,
+                        },
+                        ExpiresIn=3600,  # 1 hour
+                        HttpMethod="GET",
+                    )
+
+                    # Fix the endpoint to use regional S3 endpoint
+                    # boto3 generates URLs with s3.amazonaws.com which causes redirects
+                    # Replace with the regional endpoint
+                    presigned_url = presigned_url.replace(
+                        ".s3.amazonaws.com/", f".s3.{region}.amazonaws.com/"
+                    )
+
+                    logger.info(f"✓ Presigned URL generated")
+                    logger.info(f"URL (first 100 chars): {presigned_url[:100]}...")
+
+                except Exception as e:
+                    logger.error(f"✗ Failed to generate presigned URL: {e}")
+                    logger.error(f"Exception type: {type(e).__name__}")
+                    logger.error(traceback.format_exc())
+                    presigned_url = f"Error generating presigned URL: {str(e)}"
 
                 output_files.append(
                     {

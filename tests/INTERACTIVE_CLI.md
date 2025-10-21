@@ -6,7 +6,8 @@ An interactive command-line interface for testing the Knock Lambda function with
 
 - 🔍 **Auto-discovery**: Automatically finds all `.acsm` files in the repository
 - 🏥 **Health Check**: Test Lambda connectivity before running tests
-- 📂 **Single File Test**: Select and test individual ACSM files
+- � **Debug Mode**: Test presigned URL generation without consuming Adobe licenses
+- �📂 **Single File Test**: Select and test individual ACSM files
 - 📚 **Batch Testing**: Test all ACSM files at once
 - 🔄 **Multi-select**: Choose specific files to test together
 - 📄 **File Viewer**: Preview ACSM file content before testing
@@ -47,11 +48,12 @@ chmod +x tests/interactive_test.py
 ### Menu Options
 
 1. **🏥 Run health check** - Verify Lambda is accessible and responding
-2. **📂 Test single ACSM file** - Select one file from a list to test
-3. **📚 Test all ACSM files** - Run tests on all discovered ACSM files
-4. **🔄 Test multiple files (select)** - Choose specific files to test (multi-select with Space)
-5. **🔍 View file content** - Preview the content of an ACSM file
-6. **🚪 Exit** - Quit the CLI
+2. **� Test presigned URL (debug mode)** - Test S3 upload and presigned URL generation without using Adobe licenses
+3. **�📂 Test single ACSM file** - Select one file from a list to test
+4. **📚 Test all ACSM files** - Run tests on all discovered ACSM files
+5. **🔄 Test multiple files (select)** - Choose specific files to test (multi-select with Space)
+6. **🔍 View file content** - Preview the content of an ACSM file
+7. **🚪 Exit** - Quit the CLI
 
 ## Example Session
 
