@@ -46,8 +46,8 @@ jobs:
               run: |
                   # Use target branch as stack name
                   STACK_NAME="${{ github.base_ref }}"
-                  echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
-                  echo "Deploying to stack: $STACK_NAME"
+                  echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+                  echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
             - name: Pulumi Preview
               uses: pulumi/actions@v5
@@ -90,8 +90,8 @@ jobs:
                   BRANCH_NAME="${GITHUB_REF#refs/heads/}"
                   # Use branch name as stack name
                   STACK_NAME="$BRANCH_NAME"
-                  echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
-                  echo "Deploying to stack: $STACK_NAME"
+                  echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+                  echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
             - name: Pulumi Up
               uses: pulumi/actions@v5
