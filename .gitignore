@@ -46,3 +46,5 @@ wheels/
 
 .env
 *.acsm
+.migration-backup
+tests/results/

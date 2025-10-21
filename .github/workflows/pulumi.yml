@@ -104,10 +104,10 @@ jobs:
                   echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
                   echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  
+
                   # Get stack outputs
                   OUTPUTS=$(pulumi stack output --json --stack ${{ steps.stack.outputs.stack_name }} 2>/dev/null || echo "{}")
-                  
+
                   if [ "$OUTPUTS" != "{}" ]; then
                       echo "### 📦 Stack Outputs" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
