@@ -30,9 +30,8 @@ jobs:
               uses: astral-sh/setup-uv@v3
 
             - name: Install dependencies
-              run: |
-                  cd infrastructure
-                  uv sync
+              run: uv sync
+              working-directory: infrastructure
 
             - name: Configure AWS Credentials
               uses: aws-actions/configure-aws-credentials@v4
@@ -54,7 +53,6 @@ jobs:
               with:
                   command: preview
                   stack-name: ${{ steps.stack.outputs.stack_name }}
-                  work-dir: infrastructure
 
     deploy:
         name: Deploy Infrastructure
@@ -72,9 +70,8 @@ jobs:
               uses: astral-sh/setup-uv@v3
 
             - name: Install dependencies
-              run: |
-                  cd infrastructure
-                  uv sync
+              run: uv sync
+              working-directory: infrastructure
 
             - name: Configure AWS Credentials
               uses: aws-actions/configure-aws-credentials@v4
@@ -98,4 +95,3 @@ jobs:
               with:
                   command: up
                   stack-name: ${{ steps.stack.outputs.stack_name }}
-                  work-dir: infrastructure
