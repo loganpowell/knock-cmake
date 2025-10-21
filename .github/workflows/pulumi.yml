@@ -90,6 +90,45 @@ jobs:
 
             - name: Pulumi Up
               uses: pulumi/actions@v6.6.0
+              id: pulumi
               with:
                   command: up
                   stack-name: ${{ steps.stack.outputs.stack_name }}
+
+            - name: Generate Job Summary
+              if: always()
+              run: |
+                  echo "## 🚀 Pulumi Deployment Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Stack:** \`${{ steps.stack.outputs.stack_name }}\`" >> $GITHUB_STEP_SUMMARY
+                  echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
+                  echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  
+                  # Get stack outputs
+                  OUTPUTS=$(pulumi stack output --json --stack ${{ steps.stack.outputs.stack_name }} 2>/dev/null || echo "{}")
+                  
+                  if [ "$OUTPUTS" != "{}" ]; then
+                      echo "### 📦 Stack Outputs" >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "| Output | Value |" >> $GITHUB_STEP_SUMMARY
+                      echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+                      
+                      # Parse JSON outputs and create table rows
+                      echo "$OUTPUTS" | jq -r 'to_entries | .[] | "| `\(.key)` | `\(.value)` |"' >> $GITHUB_STEP_SUMMARY
+                      
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "---" >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      
+                      # Add quick links if function_url exists
+                      FUNCTION_URL=$(echo "$OUTPUTS" | jq -r '.function_url // empty')
+                      if [ -n "$FUNCTION_URL" ]; then
+                          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+                          echo "" >> $GITHUB_STEP_SUMMARY
+                          echo "- [Lambda Function URL]($FUNCTION_URL)" >> $GITHUB_STEP_SUMMARY
+                          echo "- [Pulumi Console](https://app.pulumi.com/loganpowell/knock-lambda/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+                      fi
+                  else
+                      echo "No outputs available for this stack." >> $GITHUB_STEP_SUMMARY
+                  fi
