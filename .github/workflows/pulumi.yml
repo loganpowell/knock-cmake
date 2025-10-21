@@ -12,6 +12,7 @@ on:
 
 env:
     PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    PULUMI_CONFIG_PASSPHRASE: ${{ vars.PULUMI_CONFIG_PASSPHRASE }}
 
 jobs:
     preview:
@@ -31,7 +32,6 @@ jobs:
 
             - name: Install dependencies
               run: uv sync
-              working-directory: infrastructure
 
             - name: Configure AWS Credentials
               uses: aws-actions/configure-aws-credentials@v4
@@ -71,7 +71,6 @@ jobs:
 
             - name: Install dependencies
               run: uv sync
-              working-directory: infrastructure
 
             - name: Configure AWS Credentials
               uses: aws-actions/configure-aws-credentials@v4
