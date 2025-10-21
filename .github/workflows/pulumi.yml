@@ -1,0 +1,101 @@
+name: Pulumi Infrastructure Deployment
+
+on:
+    push:
+        branches:
+            - main
+            - dev
+    pull_request:
+        branches:
+            - main
+            - dev
+
+env:
+    PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+jobs:
+    preview:
+        name: Preview Infrastructure Changes
+        runs-on: ubuntu-latest
+        if: github.event_name == 'pull_request'
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+
+            - name: Install dependencies
+              run: |
+                  cd infrastructure
+                  uv sync
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: us-east-2
+
+            - name: Determine Stack Name
+              id: stack
+              run: |
+                  # Use target branch as stack name
+                  STACK_NAME="${{ github.base_ref }}"
+                  echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+                  echo "Deploying to stack: $STACK_NAME"
+
+            - name: Pulumi Preview
+              uses: pulumi/actions@v5
+              with:
+                  command: preview
+                  stack-name: ${{ steps.stack.outputs.stack_name }}
+                  work-dir: infrastructure
+
+    deploy:
+        name: Deploy Infrastructure
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push'
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+
+            - name: Install dependencies
+              run: |
+                  cd infrastructure
+                  uv sync
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: us-east-2
+
+            - name: Determine Stack Name
+              id: stack
+              run: |
+                  # Extract branch name from ref
+                  BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+                  # Use branch name as stack name
+                  STACK_NAME="$BRANCH_NAME"
+                  echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+                  echo "Deploying to stack: $STACK_NAME"
+
+            - name: Pulumi Up
+              uses: pulumi/actions@v5
+              with:
+                  command: up
+                  stack-name: ${{ steps.stack.outputs.stack_name }}
+                  work-dir: infrastructure
