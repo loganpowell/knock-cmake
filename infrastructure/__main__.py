@@ -200,7 +200,9 @@ if docker_hub_username and docker_hub_token:
             credential_arn=docker_hub_secret_arn,
             opts=pulumi.ResourceOptions(
                 protect=False,  # Allow deletion for development flexibility
-                ignore_changes=["credential_arn"],  # Don't update if credentials change (requires recreate)
+                ignore_changes=[
+                    "credential_arn"
+                ],  # Don't update if credentials change (requires recreate)
             ),
         )
 
@@ -633,7 +635,9 @@ log_group = aws.cloudwatch.LogGroup(
 # Export important values
 pulumi.export("ecr_repository_url", ecr_repo.repository_url)
 if docker_hub_cache_enabled and docker_hub_cache_rule:
-    pulumi.export("docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix)
+    pulumi.export(
+        "docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix
+    )
 pulumi.export("public_ecr_cache_prefix", public_ecr_cache_rule.ecr_repository_prefix)
 if docker_hub_cache_enabled and docker_hub_secret_arn:
     pulumi.export("docker_hub_secret_arn", docker_hub_secret_arn)

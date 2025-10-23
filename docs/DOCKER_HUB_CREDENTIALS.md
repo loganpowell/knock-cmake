@@ -36,17 +36,20 @@ Pulumi Config (local)
 ### One-Time Setup
 
 1. **Set credentials in Pulumi config:**
+
    ```bash
    pulumi config set dockerHubUsername your_username
    pulumi config set --secret dockerHubToken your_token
    ```
 
 2. **Run the setup script:**
+
    ```bash
    ./scripts/sync-pulumi-gh-docker.sh
    ```
 
    This script will:
+
    - ✅ Create/update AWS Secrets Manager secret
    - ✅ Sync credentials to GitHub repository secrets
    - ✅ Set up resource policy for ECR access
@@ -61,6 +64,7 @@ pulumi up
 ### GitHub Actions
 
 Credentials are automatically provided via GitHub Secrets:
+
 - `DOCKER_HUB_USERNAME` → `${{ secrets.DOCKER_HUB_USERNAME }}`
 - `DOCKER_HUB_TOKEN` → `${{ secrets.DOCKER_HUB_TOKEN }}`
 
@@ -69,6 +73,7 @@ No additional setup needed once the initial sync is done.
 ## Credential Flow
 
 ### Local Deployment
+
 ```
 Pulumi Config → Environment Variables → Pulumi Code
                                             ↓
@@ -78,6 +83,7 @@ Pulumi Config → Environment Variables → Pulumi Code
 ```
 
 ### GitHub Actions
+
 ```
 GitHub Secrets → Workflow env → Pulumi Code
                                      ↓
@@ -99,6 +105,7 @@ GitHub Secrets → Workflow env → Pulumi Code
 **Problem:** AWS Secrets Manager secret doesn't exist yet.
 
 **Solution:** Run the setup script:
+
 ```bash
 ./scripts/sync-pulumi-gh-docker.sh
 ```
@@ -107,7 +114,8 @@ GitHub Secrets → Workflow env → Pulumi Code
 
 **Problem:** GitHub Secrets not set.
 
-**Solution:** 
+**Solution:**
+
 1. Ensure Pulumi config is set locally
 2. Run `./scripts/sync-pulumi-gh-docker.sh`
 3. Verify with `gh secret list`
@@ -129,6 +137,7 @@ gh secret list
 ```
 
 Expected output should include:
+
 - `DOCKER_HUB_USERNAME`
 - `DOCKER_HUB_TOKEN`
 
