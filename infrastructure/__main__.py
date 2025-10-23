@@ -178,36 +178,28 @@ docker_hub_cache_enabled = False
 # Only create Docker Hub resources if credentials are provided
 if docker_hub_username and docker_hub_token:
     # Reference the existing Docker Hub credentials secret in Secrets Manager
-    # This secret should be created manually once and shared across all stacks:
-    # aws secretsmanager create-secret \
-    #   --name ecr-pullthroughcache/docker-hub \
-    #   --description "Docker Hub credentials for ECR pull-through cache" \
-    #   --secret-string '{"username":"<username>","accessToken":"<token>"}' \
-    #   --region us-east-2
+    # The sync-pulumi-gh-docker.sh script creates this secret
     try:
         docker_hub_secret = aws.secretsmanager.get_secret(
             name="ecr-pullthroughcache/docker-hub"
         )
         docker_hub_secret_arn = docker_hub_secret.arn
 
-        # Create pull-through cache rule for Docker Hub
-        # Note: Pull-through cache rules are account-wide (not stack-specific)
-        # Use protect=True to prevent accidental deletion since it's shared across stacks
+        # Try to import existing pull-through cache rule, or create if it doesn't exist
+        # Pull-through cache rules are account-wide, so we check if one exists first
+        # Using import_=<id> tells Pulumi to adopt an existing resource instead of creating a new one
         docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
             "docker-hub-cache",
             ecr_repository_prefix="docker-hub",
             upstream_registry_url="registry-1.docker.io",
             credential_arn=docker_hub_secret_arn,
             opts=pulumi.ResourceOptions(
-                protect=False,  # Allow deletion for development flexibility
-                ignore_changes=[
-                    "credential_arn"
-                ],  # Don't update if credentials change (requires recreate)
+                import_="docker-hub",  # Import if exists, create if doesn't
             ),
         )
 
         docker_hub_cache_enabled = True
-        print(f"✅ Docker Hub pull-through cache enabled using existing secret")
+        print(f"✅ Docker Hub pull-through cache enabled")
     except Exception as e:
         print(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
         print("   Run: ./scripts/sync-pulumi-gh-docker.sh")
