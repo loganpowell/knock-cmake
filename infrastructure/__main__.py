@@ -189,26 +189,26 @@ if docker_hub_username and docker_hub_token:
             name="ecr-pullthroughcache/docker-hub"
         )
         docker_hub_secret_arn = docker_hub_secret.arn
-        
+
         # Create pull-through cache rule for Docker Hub
-        # Note: Each stack can have its own cache rule, but they all reference the same secret
+        # Note: Pull-through cache rules are account-wide (not stack-specific)
+        # Use protect=True to prevent accidental deletion since it's shared across stacks
         docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
             "docker-hub-cache",
             ecr_repository_prefix="docker-hub",
             upstream_registry_url="registry-1.docker.io",
             credential_arn=docker_hub_secret_arn,
+            opts=pulumi.ResourceOptions(
+                protect=False,  # Allow deletion for development flexibility
+                ignore_changes=["credential_arn"],  # Don't update if credentials change (requires recreate)
+            ),
         )
-        
+
         docker_hub_cache_enabled = True
         print(f"✅ Docker Hub pull-through cache enabled using existing secret")
     except Exception as e:
         print(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
-        print("   Create the secret manually with:")
-        print("   aws secretsmanager create-secret \\")
-        print("     --name ecr-pullthroughcache/docker-hub \\")
-        print("     --description 'Docker Hub credentials for ECR pull-through cache' \\")
-        print("     --secret-string '{\"username\":\"<username>\",\"accessToken\":\"<token>\"}' \\")
-        print("     --region us-east-2")
+        print("   Run: ./scripts/sync-pulumi-gh-docker.sh")
         docker_hub_cache_enabled = False
 else:
     print(
@@ -321,9 +321,13 @@ codebuild_policy = aws.iam.RolePolicy(
     "codebuild-policy",
     role=codebuild_role.id,
     policy=pulumi.Output.all(
-        ecr_repo.arn, 
+        ecr_repo.arn,
         source_bucket.arn,
-        docker_hub_secret_arn if docker_hub_secret_arn else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
+        (
+            docker_hub_secret_arn
+            if docker_hub_secret_arn
+            else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
+        ),
     ).apply(
         lambda args: json.dumps(
             {
@@ -368,7 +372,12 @@ codebuild_policy = aws.iam.RolePolicy(
                         "Action": [
                             "secretsmanager:GetSecretValue",
                         ],
-                        "Resource": args[2] if len(args) > 2 and args[2] != "arn:aws:secretsmanager:*:*:secret:dummy" else "arn:aws:secretsmanager:*:*:secret:dummy",  # Docker Hub secret ARN
+                        "Resource": (
+                            args[2]
+                            if len(args) > 2
+                            and args[2] != "arn:aws:secretsmanager:*:*:secret:dummy"
+                            else "arn:aws:secretsmanager:*:*:secret:dummy"
+                        ),  # Docker Hub secret ARN
                     },
                     {
                         "Effect": "Allow",
@@ -420,7 +429,12 @@ lambda_handler_object = aws.s3.BucketObject(
 )
 
 # Build dependency list for CodeBuild project
-codebuild_dependencies = [ecr_repo, codebuild_policy, source_bucket, public_ecr_cache_rule]
+codebuild_dependencies = [
+    ecr_repo,
+    codebuild_policy,
+    source_bucket,
+    public_ecr_cache_rule,
+]
 if docker_hub_cache_enabled and docker_hub_cache_rule:
     codebuild_dependencies.append(docker_hub_cache_rule)
 
@@ -522,12 +536,10 @@ build_command = command.local.Command(
         lambda project_name: f"{SHELL_CMD} shell/codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
     ),
     triggers=[
-        dockerfile_object.version_id,      # Rebuild when Dockerfile changes
+        dockerfile_object.version_id,  # Rebuild when Dockerfile changes
         lambda_handler_object.version_id,  # Rebuild when Lambda handler changes
     ],  # Do NOT include source_object to avoid rebuilds on infrastructure changes
-    opts=pulumi.ResourceOptions(
-        depends_on=build_command_dependencies
-    ),
+    opts=pulumi.ResourceOptions(depends_on=build_command_dependencies),
 )
 
 
@@ -543,7 +555,7 @@ image_digest_command = command.local.Command(
     "get-image-digest",
     create=f"cat '{get_temp_file_path()}' 2>/dev/null || echo 'digest-not-found'",
     triggers=[
-        dockerfile_object.version_id,      # Re-read when Dockerfile changes
+        dockerfile_object.version_id,  # Re-read when Dockerfile changes
         lambda_handler_object.version_id,  # Re-read when Lambda handler changes
     ],  # Do NOT include source_object to avoid re-reading on infrastructure changes
     opts=pulumi.ResourceOptions(depends_on=[build_command]),
@@ -621,9 +633,7 @@ log_group = aws.cloudwatch.LogGroup(
 # Export important values
 pulumi.export("ecr_repository_url", ecr_repo.repository_url)
 if docker_hub_cache_enabled and docker_hub_cache_rule:
-    pulumi.export(
-        "docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix
-    )
+    pulumi.export("docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix)
 pulumi.export("public_ecr_cache_prefix", public_ecr_cache_rule.ecr_repository_prefix)
 if docker_hub_cache_enabled and docker_hub_secret_arn:
     pulumi.export("docker_hub_secret_arn", docker_hub_secret_arn)

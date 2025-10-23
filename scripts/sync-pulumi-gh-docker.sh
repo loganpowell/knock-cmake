@@ -119,6 +119,36 @@ EOF
         
         echo "✅ Resource policy added"
     fi
+    
+    # Create pull-through cache rule
+    echo ""
+    echo "🔍 Checking if pull-through cache rule exists..."
+    
+    # Get the secret ARN (whether we just created it or it already existed)
+    if [ -z "$SECRET_ARN" ]; then
+        SECRET_ARN=$(aws secretsmanager describe-secret \
+            --secret-id "$SECRET_NAME" \
+            --region "$AWS_REGION" \
+            --query 'ARN' \
+            --output text)
+    fi
+    
+    # Check if pull-through cache rule exists
+    if aws ecr describe-pull-through-cache-rules \
+        --region "$AWS_REGION" \
+        --ecr-repository-prefixes docker-hub 2>/dev/null | grep -q "docker-hub"; then
+        echo "✅ Pull-through cache rule 'docker-hub' already exists"
+    else
+        echo "📝 Creating pull-through cache rule..."
+        
+        aws ecr create-pull-through-cache-rule \
+            --ecr-repository-prefix docker-hub \
+            --upstream-registry-url registry-1.docker.io \
+            --credential-arn "$SECRET_ARN" \
+            --region "$AWS_REGION" > /dev/null
+        
+        echo "✅ Pull-through cache rule created successfully"
+    fi
     echo ""
 fi
 
