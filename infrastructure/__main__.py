@@ -18,6 +18,7 @@ import shutil
 import yaml
 import json
 import pulumi
+from pulumi import Output
 import pulumi_aws as aws
 import pulumi_command as command
 from config import (
@@ -154,6 +155,90 @@ def get_validated_buildspec():
 # Configuration imported from config.py
 # aws_region, project_name, stack_name, etc. are now available
 
+# Create Pulumi config instance for reading Docker Hub credentials
+pulumi_config = pulumi.Config()
+
+# Get Docker Hub credentials from Pulumi config (environment variables)
+# These can be set via:
+# - Local: pulumi config set dockerHubUsername <username> --secret
+# - Local: pulumi config set dockerHubToken <token> --secret
+# - Or via environment variables: DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN
+docker_hub_username = pulumi_config.get("dockerHubUsername") or os.environ.get(
+    "DOCKER_HUB_USERNAME"
+)
+docker_hub_token = pulumi_config.get_secret("dockerHubToken") or os.environ.get(
+    "DOCKER_HUB_TOKEN"
+)
+
+# Initialize variables for conditional resources
+docker_hub_secret = None
+docker_hub_secret_version = None
+docker_hub_cache_rule = None
+docker_hub_cache_enabled = False
+
+# Only create Docker Hub resources if credentials are provided
+if docker_hub_username and docker_hub_token:
+    # Create Docker Hub credentials secret in Secrets Manager for pull-through cache
+    docker_hub_secret = aws.secretsmanager.Secret(
+        "docker-hub-secret",
+        name="ecr-pullthroughcache/docker-hub",
+        description="Docker Hub credentials for ECR pull-through cache",
+        recovery_window_in_days=0,  # Allow immediate deletion if needed for stack cleanup
+    )
+
+    # Use Output.all() to handle potential Output types from Pulumi config secrets
+    secret_string = Output.all(docker_hub_username, docker_hub_token).apply(
+        lambda args: json.dumps({"username": args[0], "accessToken": args[1]})
+    )
+
+    docker_hub_secret_version = aws.secretsmanager.SecretVersion(
+        "docker-hub-secret-version",
+        secret_id=docker_hub_secret.id,
+        secret_string=secret_string,
+    )
+
+    # Add resource policy to allow ECR to read the secret
+    # This is required for pull-through cache to work
+    docker_hub_secret_policy = aws.secretsmanager.SecretPolicy(
+        "docker-hub-secret-policy",
+        secret_arn=docker_hub_secret.arn,
+        policy=docker_hub_secret.arn.apply(
+            lambda arn: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ecr.amazonaws.com"
+                        },
+                        "Action": "secretsmanager:GetSecretValue",
+                        "Resource": arn
+                    }
+                ]
+            })
+        ),
+        opts=pulumi.ResourceOptions(depends_on=[docker_hub_secret_version]),
+    )
+
+    # Create pull-through cache rule for Docker Hub
+    docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
+        "docker-hub-cache",
+        ecr_repository_prefix="docker-hub",
+        upstream_registry_url="registry-1.docker.io",
+        credential_arn=docker_hub_secret.arn,
+        opts=pulumi.ResourceOptions(depends_on=[docker_hub_secret_policy]),
+    )
+
+    docker_hub_cache_enabled = True
+else:
+    print(
+        "⚠️  Docker Hub credentials not provided - pull-through cache will not be enabled"
+    )
+    print(
+        "   Set DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN environment variables to enable caching"
+    )
+    docker_hub_cache_enabled = False
+
 # Create ECR repository for container images
 ecr_repo = aws.ecr.Repository(
     "knock-repo",
@@ -163,6 +248,14 @@ ecr_repo = aws.ecr.Repository(
     image_tag_mutability="MUTABLE",
     image_scanning_configuration={"scan_on_push": True},
     force_delete=True,  # Allow repository deletion even with images
+)
+
+# Cache rule for public ECR repositories (like AWS base images)
+# This is useful if you want to use AWS Lambda base images in the future
+public_ecr_cache_rule = aws.ecr.PullThroughCacheRule(
+    "public-ecr-cache",
+    ecr_repository_prefix="ecr-public",
+    upstream_registry_url="public.ecr.aws",
 )
 
 # Create ECR lifecycle policy to manage image retention
@@ -247,7 +340,11 @@ codebuild_role = aws.iam.Role(
 codebuild_policy = aws.iam.RolePolicy(
     "codebuild-policy",
     role=codebuild_role.id,
-    policy=pulumi.Output.all(ecr_repo.arn, source_bucket.arn).apply(
+    policy=pulumi.Output.all(
+        ecr_repo.arn, 
+        source_bucket.arn,
+        docker_hub_secret.arn if docker_hub_secret else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
+    ).apply(
         lambda args: json.dumps(
             {
                 "Version": "2012-10-17",
@@ -280,8 +377,18 @@ codebuild_policy = aws.iam.RolePolicy(
                             "ecr:CompleteLayerUpload",
                             "ecr:DescribeRepositories",
                             "ecr:DescribeImages",
+                            "ecr:CreateRepository",  # Needed for pull-through cache to create repos on-demand
+                            "ecr:BatchImportUpstreamImage",  # Needed for pull-through cache to import images
+                            "ecr:DescribePullThroughCacheRules",  # Needed to verify cache rules
                         ],
-                        "Resource": args[0],  # ECR repo ARN
+                        "Resource": "*",  # Pull-through cache creates dynamic repositories
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "secretsmanager:GetSecretValue",
+                        ],
+                        "Resource": args[2] if len(args) > 2 and args[2] != "arn:aws:secretsmanager:*:*:secret:dummy" else "arn:aws:secretsmanager:*:*:secret:dummy",  # Docker Hub secret ARN
                     },
                     {
                         "Effect": "Allow",
@@ -313,6 +420,7 @@ source_object = aws.s3.BucketObject(
 )
 
 # Upload Dockerfile separately to track its changes
+# This is used to trigger rebuilds when the Dockerfile changes (actual application code)
 dockerfile_object = aws.s3.BucketObject(
     "dockerfile",
     bucket=source_bucket.bucket,
@@ -320,6 +428,21 @@ dockerfile_object = aws.s3.BucketObject(
     source=pulumi.FileAsset("lambda/Dockerfile"),
     opts=pulumi.ResourceOptions(depends_on=[source_bucket]),
 )
+
+# Upload Lambda handler separately to track application code changes
+# This is used to trigger rebuilds when the actual Lambda code changes
+lambda_handler_object = aws.s3.BucketObject(
+    "lambda-handler",
+    bucket=source_bucket.bucket,
+    key="infrastructure/lambda/handler.py",
+    source=pulumi.FileAsset("lambda/handler.py"),
+    opts=pulumi.ResourceOptions(depends_on=[source_bucket]),
+)
+
+# Build dependency list for CodeBuild project
+codebuild_dependencies = [ecr_repo, codebuild_policy, source_bucket, public_ecr_cache_rule]
+if docker_hub_cache_enabled and docker_hub_cache_rule:
+    codebuild_dependencies.append(docker_hub_cache_rule)
 
 # Create CodeBuild project
 codebuild_project = aws.codebuild.Project(
@@ -346,7 +469,7 @@ codebuild_project = aws.codebuild.Project(
         location=pulumi.Output.concat(source_bucket.bucket, "/source.zip"),
         buildspec=get_validated_buildspec(),
     ),
-    opts=pulumi.ResourceOptions(depends_on=[ecr_repo, codebuild_policy, source_bucket]),
+    opts=pulumi.ResourceOptions(depends_on=codebuild_dependencies),
 )
 
 # Create IAM role for Lambda
@@ -404,18 +527,26 @@ lambda_s3_policy = aws.iam.RolePolicy(
     ),
 )
 
+# Build dependency list for build command
+# Dependencies: Must wait for CodeBuild project and cache rules to be ready
+build_command_dependencies = [codebuild_project, source_object, public_ecr_cache_rule]
+if docker_hub_cache_enabled and docker_hub_cache_rule:
+    build_command_dependencies.append(docker_hub_cache_rule)
+
 # Trigger CodeBuild to build and push the Docker image
+# IMPORTANT: Only trigger on actual application code changes (Dockerfile, handler.py)
+# NOT on infrastructure changes (buildspec, __main__.py, etc.)
 build_command = command.local.Command(
     "knock-lambda-build-run",
     create=pulumi.Output.concat(codebuild_project.name).apply(
         lambda project_name: f"{SHELL_CMD} shell/codebuild-runner-with-digest.sh '{project_name}' '{AWS_REGION}' '{CODEBUILD_MAX_RETRIES}' '{CODEBUILD_RETRY_DELAY}' '{CODEBUILD_TIMEOUT_MINUTES}'"
     ),
     triggers=[
-        source_object.version_id,
-        dockerfile_object.version_id,
-    ],  # Re-run when source code or Dockerfile changes
+        dockerfile_object.version_id,      # Rebuild when Dockerfile changes
+        lambda_handler_object.version_id,  # Rebuild when Lambda handler changes
+    ],  # Do NOT include source_object to avoid rebuilds on infrastructure changes
     opts=pulumi.ResourceOptions(
-        depends_on=[codebuild_project, source_object, dockerfile_object]
+        depends_on=build_command_dependencies
     ),
 )
 
@@ -426,13 +557,15 @@ def get_temp_file_path():
     return os.path.join(temp_dir, "image_uri_digest.txt")
 
 
+# Read the image digest after the build completes
+# Only re-read when application code changes (not infrastructure)
 image_digest_command = command.local.Command(
     "get-image-digest",
     create=f"cat '{get_temp_file_path()}' 2>/dev/null || echo 'digest-not-found'",
     triggers=[
-        source_object.version_id,
-        dockerfile_object.version_id,
-    ],  # Re-run when source code or Dockerfile changes
+        dockerfile_object.version_id,      # Re-read when Dockerfile changes
+        lambda_handler_object.version_id,  # Re-read when Lambda handler changes
+    ],  # Do NOT include source_object to avoid re-reading on infrastructure changes
     opts=pulumi.ResourceOptions(depends_on=[build_command]),
 )
 
@@ -507,6 +640,13 @@ log_group = aws.cloudwatch.LogGroup(
 
 # Export important values
 pulumi.export("ecr_repository_url", ecr_repo.repository_url)
+if docker_hub_cache_enabled and docker_hub_cache_rule:
+    pulumi.export(
+        "docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix
+    )
+pulumi.export("public_ecr_cache_prefix", public_ecr_cache_rule.ecr_repository_prefix)
+if docker_hub_cache_enabled and docker_hub_secret:
+    pulumi.export("docker_hub_secret_arn", docker_hub_secret.arn)
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
 pulumi.export("function_url", function_url.function_url)

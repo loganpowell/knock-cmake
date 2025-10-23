@@ -13,12 +13,42 @@ phases:
       - free -h && df -h
       - echo "Checking AWS credentials"
       - aws sts get-caller-identity
-      - echo "Extracting ECR region from URI"
+      - echo "Extracting ECR region and account from URI"
       - ECR_REGION=$(echo $ECR_REPOSITORY_URI | cut -d. -f4)
-      - echo "ECR Region is $ECR_REGION, Default Region is $AWS_DEFAULT_REGION"
+      - ECR_ACCOUNT_ID=$(echo $ECR_REPOSITORY_URI | cut -d. -f1 | cut -d/ -f3)
+      - ECR_REGISTRY_URL="$ECR_ACCOUNT_ID.dkr.ecr.$ECR_REGION.amazonaws.com"
+      - echo "ECR Region is $ECR_REGION, Account ID is $ECR_ACCOUNT_ID"
+      - echo "ECR Registry URL is $ECR_REGISTRY_URL"
+      - echo "Verifying pull-through cache rules are available"
+      - aws ecr describe-pull-through-cache-rules --region $ECR_REGION || echo "Warning - Could not verify pull-through cache rules"
       - echo "Getting ECR login using ECR region"
-      - aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+      - aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URL
       - echo "Successfully logged in to ECR"
+      - echo "Ensuring pull-through cache repository exists"
+      - |
+        # Try to describe the repository to see if it exists
+        if aws ecr describe-repositories --repository-names docker-hub/library/debian --region $ECR_REGION 2>/dev/null; then
+          echo "✅ Pull-through cache repository already exists"
+        else
+          echo "📦 Repository doesn't exist yet - creating via pull-through cache"
+          # The first pull should trigger automatic repository creation via pull-through cache
+          # We need to pull with error handling
+          if docker pull $ECR_REGISTRY_URL/docker-hub/library/debian:bookworm-slim 2>&1; then
+            echo "✅ Successfully pulled and created repository via pull-through cache"
+          else
+            echo "⚠️ Initial pull failed - this is normal for first-time cache setup"
+            echo "Waiting 5 seconds for AWS to propagate..."
+            sleep 5
+            # Try once more
+            if docker pull $ECR_REGISTRY_URL/docker-hub/library/debian:bookworm-slim 2>&1; then
+              echo "✅ Successfully pulled on retry"
+            else
+              echo "⚠️ Pull-through cache not working - build will fail"
+              echo "This may indicate an issue with Docker Hub credentials in Secrets Manager"
+            fi
+          fi
+        fi
+      - echo "Pre-build phase complete"
   build:
     commands:
       - echo "Build started on $(date)"
@@ -32,7 +62,7 @@ phases:
       - echo "Checking if build_container.py exists"
       - if [ -f "build_container.py" ]; then echo "build_container.py found"; else echo "ERROR - build_container.py not found"; exit 1; fi
       - echo "Starting Docker build with target URI $ECR_REPOSITORY_URI:latest"
-      - docker build -f infrastructure/lambda/Dockerfile -t $ECR_REPOSITORY_URI:latest . --no-cache --progress=plain
+      - docker build -f infrastructure/lambda/Dockerfile -t $ECR_REPOSITORY_URI:latest . --build-arg ECR_REGISTRY_URL=$ECR_REGISTRY_URL --no-cache --progress=plain
       - BUILD_EXIT_CODE=$?
       - echo "Docker build exit code was $BUILD_EXIT_CODE"
       - if [ $BUILD_EXIT_CODE -ne 0 ]; then echo "ERROR - Docker build failed with exit code $BUILD_EXIT_CODE"; exit $BUILD_EXIT_CODE; fi

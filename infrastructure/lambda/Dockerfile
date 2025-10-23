@@ -1,6 +1,8 @@
 # Stage 1: Build knock binary using Debian
 # Using libgourou v0.8.7 which requires OpenSSL 3.x support
-FROM debian:bookworm-slim AS builder
+# Pull from ECR pull-through cache for faster builds
+ARG ECR_REGISTRY_URL
+FROM ${ECR_REGISTRY_URL}/docker-hub/library/debian:bookworm-slim AS builder
 
 # Install build dependencies including static libraries
 RUN apt-get update && apt-get install -y \
@@ -63,7 +65,9 @@ RUN set -o pipefail && \
 
 # Stage 2: Create Lambda runtime image using Debian to match build GLIBC
 # Using Debian Bookworm with Python 3.11 to match build environment
-FROM debian:bookworm-slim
+# Pull from ECR pull-through cache for faster builds
+ARG ECR_REGISTRY_URL
+FROM ${ECR_REGISTRY_URL}/docker-hub/library/debian:bookworm-slim
 
 # Install Python and runtime dependencies
 RUN apt-get update && apt-get install -y \

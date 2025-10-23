@@ -1,134 +1,140 @@
 name: Pulumi Infrastructure Deployment
 
 on:
-    push:
-        branches:
-            - main
-            - dev
-    pull_request:
-        branches:
-            - main
-            - dev
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
 
 env:
-    PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
 jobs:
-    preview:
-        name: Preview Infrastructure Changes
-        runs-on: ubuntu-latest
-        if: github.event_name == 'pull_request'
-        steps:
-            - uses: actions/checkout@v4
+  preview:
+    name: Preview Infrastructure Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Set up Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-            - name: Install dependencies
-              run: uv sync
+      - name: Install dependencies
+        run: uv sync
 
-            - name: Configure AWS Credentials
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: us-east-2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
 
-            - name: Determine Stack Name
-              id: stack
-              run: |
-                  # Use target branch as stack name
-                  STACK_NAME="${{ github.base_ref }}"
-                  echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
-                  echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
+      - name: Determine Stack Name
+        id: stack
+        run: |
+          # Use target branch as stack name
+          STACK_NAME="${{ github.base_ref }}"
+          echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
-            - name: Pulumi Preview
-              uses: pulumi/actions@v6.6.0
-              with:
-                  command: preview
-                  stack-name: ${{ steps.stack.outputs.stack_name }}
+      - name: Pulumi Preview
+        uses: pulumi/actions@v6.6.0
+        with:
+          command: preview
+          stack-name: ${{ steps.stack.outputs.stack_name }}
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-    deploy:
-        name: Deploy Infrastructure
-        runs-on: ubuntu-latest
-        if: github.event_name == 'push'
-        steps:
-            - uses: actions/checkout@v4
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Set up Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-            - name: Install dependencies
-              run: uv sync
+      - name: Install dependencies
+        run: uv sync
 
-            - name: Configure AWS Credentials
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: us-east-2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
 
-            - name: Determine Stack Name
-              id: stack
-              run: |
-                  # Extract branch name from ref
-                  BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-                  # Use branch name as stack name
-                  STACK_NAME="$BRANCH_NAME"
-                  echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
-                  echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
+      - name: Determine Stack Name
+        id: stack
+        run: |
+          # Extract branch name from ref
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          # Use branch name as stack name
+          STACK_NAME="$BRANCH_NAME"
+          echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
 
-            - name: Pulumi Up
-              uses: pulumi/actions@v6.6.0
-              id: pulumi
-              with:
-                  command: up
-                  stack-name: ${{ steps.stack.outputs.stack_name }}
+      - name: Pulumi Up
+        uses: pulumi/actions@v6.6.0
+        id: pulumi
+        with:
+          command: up
+          stack-name: ${{ steps.stack.outputs.stack_name }}
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-            - name: Generate Job Summary
-              if: always()
-              run: |
-                  echo "## 🚀 Pulumi Deployment Summary" >> $GITHUB_STEP_SUMMARY
+      - name: Generate Job Summary
+        if: always()
+        run: |
+          echo "## 🚀 Pulumi Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack:** \`${{ steps.stack.outputs.stack_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Get stack outputs
+          OUTPUTS=$(pulumi stack output --json --stack ${{ steps.stack.outputs.stack_name }} 2>/dev/null || echo "{}")
+
+          if [ "$OUTPUTS" != "{}" ]; then
+              echo "### 📦 Stack Outputs" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Output | Value |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+              
+              # Parse JSON outputs and create table rows
+              echo "$OUTPUTS" | jq -r 'to_entries | .[] | "| `\(.key)` | `\(.value)` |"' >> $GITHUB_STEP_SUMMARY
+              
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              
+              # Add quick links if function_url exists
+              FUNCTION_URL=$(echo "$OUTPUTS" | jq -r '.function_url // empty')
+              if [ -n "$FUNCTION_URL" ]; then
+                  echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "**Stack:** \`${{ steps.stack.outputs.stack_name }}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  # Get stack outputs
-                  OUTPUTS=$(pulumi stack output --json --stack ${{ steps.stack.outputs.stack_name }} 2>/dev/null || echo "{}")
-
-                  if [ "$OUTPUTS" != "{}" ]; then
-                      echo "### 📦 Stack Outputs" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "| Output | Value |" >> $GITHUB_STEP_SUMMARY
-                      echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-                      
-                      # Parse JSON outputs and create table rows
-                      echo "$OUTPUTS" | jq -r 'to_entries | .[] | "| `\(.key)` | `\(.value)` |"' >> $GITHUB_STEP_SUMMARY
-                      
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "---" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      
-                      # Add quick links if function_url exists
-                      FUNCTION_URL=$(echo "$OUTPUTS" | jq -r '.function_url // empty')
-                      if [ -n "$FUNCTION_URL" ]; then
-                          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
-                          echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "- [Lambda Function URL]($FUNCTION_URL)" >> $GITHUB_STEP_SUMMARY
-                          echo "- [Pulumi Console](https://app.pulumi.com/loganpowell/knock-lambda/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
-                      fi
-                  else
-                      echo "No outputs available for this stack." >> $GITHUB_STEP_SUMMARY
-                  fi
+                  echo "- [Lambda Function URL]($FUNCTION_URL)" >> $GITHUB_STEP_SUMMARY
+                  echo "- [Pulumi Console](https://app.pulumi.com/loganpowell/knock-lambda/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+              fi
+          else
+              echo "No outputs available for this stack." >> $GITHUB_STEP_SUMMARY
+          fi
