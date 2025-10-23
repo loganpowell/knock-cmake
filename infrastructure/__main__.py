@@ -171,65 +171,45 @@ docker_hub_token = pulumi_config.get_secret("dockerHubToken") or os.environ.get(
 )
 
 # Initialize variables for conditional resources
-docker_hub_secret = None
-docker_hub_secret_version = None
+docker_hub_secret_arn = None
 docker_hub_cache_rule = None
 docker_hub_cache_enabled = False
 
 # Only create Docker Hub resources if credentials are provided
 if docker_hub_username and docker_hub_token:
-    # Create Docker Hub credentials secret in Secrets Manager for pull-through cache
-    docker_hub_secret = aws.secretsmanager.Secret(
-        "docker-hub-secret",
-        name="ecr-pullthroughcache/docker-hub",
-        description="Docker Hub credentials for ECR pull-through cache",
-        recovery_window_in_days=0,  # Allow immediate deletion if needed for stack cleanup
-    )
-
-    # Use Output.all() to handle potential Output types from Pulumi config secrets
-    secret_string = Output.all(docker_hub_username, docker_hub_token).apply(
-        lambda args: json.dumps({"username": args[0], "accessToken": args[1]})
-    )
-
-    docker_hub_secret_version = aws.secretsmanager.SecretVersion(
-        "docker-hub-secret-version",
-        secret_id=docker_hub_secret.id,
-        secret_string=secret_string,
-    )
-
-    # Add resource policy to allow ECR to read the secret
-    # This is required for pull-through cache to work
-    docker_hub_secret_policy = aws.secretsmanager.SecretPolicy(
-        "docker-hub-secret-policy",
-        secret_arn=docker_hub_secret.arn,
-        policy=docker_hub_secret.arn.apply(
-            lambda arn: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ecr.amazonaws.com"
-                        },
-                        "Action": "secretsmanager:GetSecretValue",
-                        "Resource": arn
-                    }
-                ]
-            })
-        ),
-        opts=pulumi.ResourceOptions(depends_on=[docker_hub_secret_version]),
-    )
-
-    # Create pull-through cache rule for Docker Hub
-    docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
-        "docker-hub-cache",
-        ecr_repository_prefix="docker-hub",
-        upstream_registry_url="registry-1.docker.io",
-        credential_arn=docker_hub_secret.arn,
-        opts=pulumi.ResourceOptions(depends_on=[docker_hub_secret_policy]),
-    )
-
-    docker_hub_cache_enabled = True
+    # Reference the existing Docker Hub credentials secret in Secrets Manager
+    # This secret should be created manually once and shared across all stacks:
+    # aws secretsmanager create-secret \
+    #   --name ecr-pullthroughcache/docker-hub \
+    #   --description "Docker Hub credentials for ECR pull-through cache" \
+    #   --secret-string '{"username":"<username>","accessToken":"<token>"}' \
+    #   --region us-east-2
+    try:
+        docker_hub_secret = aws.secretsmanager.get_secret(
+            name="ecr-pullthroughcache/docker-hub"
+        )
+        docker_hub_secret_arn = docker_hub_secret.arn
+        
+        # Create pull-through cache rule for Docker Hub
+        # Note: Each stack can have its own cache rule, but they all reference the same secret
+        docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
+            "docker-hub-cache",
+            ecr_repository_prefix="docker-hub",
+            upstream_registry_url="registry-1.docker.io",
+            credential_arn=docker_hub_secret_arn,
+        )
+        
+        docker_hub_cache_enabled = True
+        print(f"✅ Docker Hub pull-through cache enabled using existing secret")
+    except Exception as e:
+        print(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
+        print("   Create the secret manually with:")
+        print("   aws secretsmanager create-secret \\")
+        print("     --name ecr-pullthroughcache/docker-hub \\")
+        print("     --description 'Docker Hub credentials for ECR pull-through cache' \\")
+        print("     --secret-string '{\"username\":\"<username>\",\"accessToken\":\"<token>\"}' \\")
+        print("     --region us-east-2")
+        docker_hub_cache_enabled = False
 else:
     print(
         "⚠️  Docker Hub credentials not provided - pull-through cache will not be enabled"
@@ -343,7 +323,7 @@ codebuild_policy = aws.iam.RolePolicy(
     policy=pulumi.Output.all(
         ecr_repo.arn, 
         source_bucket.arn,
-        docker_hub_secret.arn if docker_hub_secret else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
+        docker_hub_secret_arn if docker_hub_secret_arn else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
     ).apply(
         lambda args: json.dumps(
             {
@@ -645,8 +625,8 @@ if docker_hub_cache_enabled and docker_hub_cache_rule:
         "docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix
     )
 pulumi.export("public_ecr_cache_prefix", public_ecr_cache_rule.ecr_repository_prefix)
-if docker_hub_cache_enabled and docker_hub_secret:
-    pulumi.export("docker_hub_secret_arn", docker_hub_secret.arn)
+if docker_hub_cache_enabled and docker_hub_secret_arn:
+    pulumi.export("docker_hub_secret_arn", docker_hub_secret_arn)
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
 pulumi.export("function_url", function_url.function_url)
