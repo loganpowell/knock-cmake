@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Git post-checkout hook template
+# Automatically switches Pulumi stack to match the current branch
+#
+# To install this hook:
+#   cp scripts/git-hooks/post-checkout .git/hooks/post-checkout
+#   chmod +x .git/hooks/post-checkout
+#
+# Or run: ./scripts/setup-git-hooks.sh
+
+# Arguments passed by git:
+# $1 = ref of previous HEAD
+# $2 = ref of new HEAD  
+# $3 = flag (1 if checking out a branch, 0 if checking out files)
+
+PREV_HEAD=$1
+NEW_HEAD=$2
+BRANCH_CHECKOUT=$3
+
+# Only run on branch checkouts (not file checkouts)
+if [ "$BRANCH_CHECKOUT" != "1" ]; then
+    exit 0
+fi
+
+# Get current branch name
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+
+# Skip if we're in detached HEAD state
+if [ "$BRANCH_NAME" = "HEAD" ]; then
+    exit 0
+fi
+
+# Get repo root and infrastructure directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+INFRA_DIR="$REPO_ROOT/infrastructure"
+
+# Check if infrastructure directory exists
+if [ ! -d "$INFRA_DIR" ]; then
+    exit 0
+fi
+
+# Check if Pulumi is available
+if ! command -v pulumi &> /dev/null; then
+    exit 0
+fi
+
+# Change to infrastructure directory for Pulumi commands
+(
+    cd "$INFRA_DIR" || exit 0
+
+    # Get current stack (in infrastructure directory context)
+    CURRENT_STACK=$(pulumi stack --show-name 2>/dev/null || echo "")
+    if [ -z "$CURRENT_STACK" ]; then
+        exit 0
+    fi
+
+    # For Pulumi Cloud, stack name is just the short name (not org/project/stack)
+    # The stack name directly corresponds to the branch name
+    TARGET_STACK="$BRANCH_NAME"
+
+    # Check if already on the correct stack
+    if [ "$CURRENT_STACK" = "$TARGET_STACK" ]; then
+        exit 0
+    fi
+
+    # Try to select the target stack
+    if pulumi stack select "$TARGET_STACK" 2>/dev/null; then
+        echo "🔄 Switched Pulumi stack: $CURRENT_STACK → $TARGET_STACK"
+    fi
+    # If stack doesn't exist, silently stay on current stack
+)
+
+exit 0
