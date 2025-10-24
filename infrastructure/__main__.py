@@ -1,8 +1,15 @@
 """
 Knock Lambda Infrastructure with Pulumi
 
-This module provisions AWS infrastructure for the Knock ACSM conversion service.
-The infrastructure includes:
+This module provisions AWS infrastructure for the Knock ACSM conversion ser                        f"Command {i} in phase '{phase_name}' must be a string, got {type(cmd)}: {cmd}"
+                    )
+
+        pulumi.log.info("✅ Buildspec YAML validation passed")
+        return True
+
+    except ImportError:
+        pulumi.log.warn("⚠️ PyYAML not available, skipping validation")
+        return True infrastructure includes:
 - ECR repository for container images
 - CodeBuild project to build Docker images using infrastructure/lambda/Dockerfile
 - Lambda function using the container image with infrastructure/lambda/handler.py
@@ -128,7 +135,7 @@ def validate_buildspec_yaml(buildspec_content):
         print("⚠️ PyYAML not available, skipping validation")
         return True
     except Exception as e:
-        print(f"❌ Buildspec YAML validation failed: {e}")
+        pulumi.log.error(f"❌ Buildspec YAML validation failed: {e}")
         raise e
 
 
@@ -195,21 +202,22 @@ if docker_hub_username and docker_hub_token:
             credential_arn=docker_hub_secret_arn,
             opts=pulumi.ResourceOptions(
                 import_="docker-hub",  # Import if exists, create if doesn't
+                protect=True,
             ),
         )
 
         docker_hub_cache_enabled = True
-        print(f"✅ Docker Hub pull-through cache enabled")
+        pulumi.log.info("✅ Docker Hub pull-through cache enabled")
     except Exception as e:
-        print(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
-        print("   Run: ./scripts/sync-pulumi-gh-docker.sh")
+        pulumi.log.warn(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
+        pulumi.log.warn("   Run: ./scripts/sync-pulumi-gh-docker.sh")
         docker_hub_cache_enabled = False
 else:
-    print(
+    pulumi.log.warn(
         "⚠️  Docker Hub credentials not provided - pull-through cache will not be enabled"
     )
-    print(
-        "   Set DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN environment variables to enable caching"
+    pulumi.log.warn(
+        "Set DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN environment variables to enable caching"
     )
     docker_hub_cache_enabled = False
 
