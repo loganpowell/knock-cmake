@@ -101,7 +101,7 @@ jobs:
       - name: Save Outputs to GitHub Variables
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.VARIABLE_EDITING_PAT }}
         run: |
           BRANCH_NAME="${{ steps.stack.outputs.branch_name }}"
 
@@ -115,27 +115,26 @@ jobs:
           ECR_REPOSITORY_URL=$(echo "$OUTPUTS" | jq -r '.ecr_repository_url // empty')
 
           # Save as repository variables with branch prefix (e.g., MAIN_FUNCTION_URL, DEV_FUNCTION_URL)
-          # This works with default GITHUB_TOKEN permissions
           BRANCH_PREFIX=$(echo "$BRANCH_NAME" | tr '[:lower:]' '[:upper:]')
 
           if [ -n "$FUNCTION_URL" ]; then
             echo "Setting ${BRANCH_PREFIX}_FUNCTION_URL"
-            gh variable set "${BRANCH_PREFIX}_FUNCTION_URL" --body "$FUNCTION_URL" || echo "⚠️  Failed to set variable (may need repo admin permissions)"
+            gh variable set "${BRANCH_PREFIX}_FUNCTION_URL" --body "$FUNCTION_URL"
           fi
 
           if [ -n "$CODEBUILD_PROJECT_NAME" ]; then
             echo "Setting ${BRANCH_PREFIX}_CODEBUILD_PROJECT_NAME"
-            gh variable set "${BRANCH_PREFIX}_CODEBUILD_PROJECT_NAME" --body "$CODEBUILD_PROJECT_NAME" || echo "⚠️  Failed to set variable"
+            gh variable set "${BRANCH_PREFIX}_CODEBUILD_PROJECT_NAME" --body "$CODEBUILD_PROJECT_NAME"
           fi
 
           if [ -n "$LAMBDA_FUNCTION_NAME" ]; then
             echo "Setting ${BRANCH_PREFIX}_LAMBDA_FUNCTION_NAME"
-            gh variable set "${BRANCH_PREFIX}_LAMBDA_FUNCTION_NAME" --body "$LAMBDA_FUNCTION_NAME" || echo "⚠️  Failed to set variable"
+            gh variable set "${BRANCH_PREFIX}_LAMBDA_FUNCTION_NAME" --body "$LAMBDA_FUNCTION_NAME"
           fi
 
           if [ -n "$ECR_REPOSITORY_URL" ]; then
             echo "Setting ${BRANCH_PREFIX}_ECR_REPOSITORY_URL"
-            gh variable set "${BRANCH_PREFIX}_ECR_REPOSITORY_URL" --body "$ECR_REPOSITORY_URL" || echo "⚠️  Failed to set variable"
+            gh variable set "${BRANCH_PREFIX}_ECR_REPOSITORY_URL" --body "$ECR_REPOSITORY_URL"
           fi
 
           echo "✅ Outputs saved as repository variables with prefix: ${BRANCH_PREFIX}_"
