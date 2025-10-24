@@ -1,65 +1,17 @@
 name: Pulumi Infrastructure Deployment
 
 on:
-  push:
-    branches:
-      - main
-      - dev
-  pull_request:
-    branches:
-      - main
-      - dev
+  release:
+    types: [published]
+  workflow_dispatch: # Allow manual triggering for testing
 
 env:
   PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
 jobs:
-  preview:
-    name: Preview Infrastructure Changes
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
-
-      - name: Determine Stack Name
-        id: stack
-        run: |
-          # Use target branch as stack name
-          STACK_NAME="${{ github.base_ref }}"
-          echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
-          echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
-
-      - name: Pulumi Preview
-        uses: pulumi/actions@v6.6.0
-        with:
-          command: preview
-          stack-name: ${{ steps.stack.outputs.stack_name }}
-        env:
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
-
   deploy:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
@@ -84,12 +36,19 @@ jobs:
       - name: Determine Stack Name
         id: stack
         run: |
-          # Extract branch name from ref
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          # Use branch name as stack name
+          # For releases, use the target branch
+          # For manual runs, use the current branch
+          if [ "${{ github.event_name }}" = "release" ]; then
+            BRANCH_NAME="${{ github.event.release.target_commitish }}"
+          else
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          fi
+
           STACK_NAME="$BRANCH_NAME"
           echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
+          echo "Branch: $BRANCH_NAME"
 
       - name: Pulumi Up
         uses: pulumi/actions@v6.6.0
@@ -138,3 +97,44 @@ jobs:
           else
               echo "No outputs available for this stack." >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Save Outputs to GitHub Variables
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="${{ steps.stack.outputs.branch_name }}"
+
+          # Get stack outputs
+          OUTPUTS=$(pulumi stack output --json --stack ${{ steps.stack.outputs.stack_name }} 2>/dev/null || echo "{}")
+
+          # Create environment if it doesn't exist (will fail silently if it exists)
+          gh api repos/${{ github.repository }}/environments/$BRANCH_NAME -X PUT 2>/dev/null || true
+
+          # Extract and save key outputs as environment variables
+          FUNCTION_URL=$(echo "$OUTPUTS" | jq -r '.function_url // empty')
+          CODEBUILD_PROJECT_NAME=$(echo "$OUTPUTS" | jq -r '.codebuild_project_name // empty')
+          LAMBDA_FUNCTION_NAME=$(echo "$OUTPUTS" | jq -r '.lambda_function_name // empty')
+          ECR_REPOSITORY_URL=$(echo "$OUTPUTS" | jq -r '.ecr_repository_url // empty')
+
+          if [ -n "$FUNCTION_URL" ]; then
+            echo "Setting FUNCTION_URL for environment $BRANCH_NAME"
+            gh variable set FUNCTION_URL --body "$FUNCTION_URL" --env "$BRANCH_NAME"
+          fi
+
+          if [ -n "$CODEBUILD_PROJECT_NAME" ]; then
+            echo "Setting CODEBUILD_PROJECT_NAME for environment $BRANCH_NAME"
+            gh variable set CODEBUILD_PROJECT_NAME --body "$CODEBUILD_PROJECT_NAME" --env "$BRANCH_NAME"
+          fi
+
+          if [ -n "$LAMBDA_FUNCTION_NAME" ]; then
+            echo "Setting LAMBDA_FUNCTION_NAME for environment $BRANCH_NAME"
+            gh variable set LAMBDA_FUNCTION_NAME --body "$LAMBDA_FUNCTION_NAME" --env "$BRANCH_NAME"
+          fi
+
+          if [ -n "$ECR_REPOSITORY_URL" ]; then
+            echo "Setting ECR_REPOSITORY_URL for environment $BRANCH_NAME"
+            gh variable set ECR_REPOSITORY_URL --body "$ECR_REPOSITORY_URL" --env "$BRANCH_NAME"
+          fi
+
+          echo "✅ Outputs saved to GitHub environment: $BRANCH_NAME"

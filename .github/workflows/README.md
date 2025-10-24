@@ -1,13 +1,82 @@
 # GitHub Actions CI/CD Setup for Pulumi
 
-This document explains how to complete the setup for automated Pulumi deployments using GitHub Actions.
+This document explains the Pulumi deployment workflow and how to access deployment outputs.
 
-## Current Status
+## Deployment Strategy
 
-✅ GitHub Actions workflow created (`.github/workflows/pulumi.yml`)
-✅ Branch-based stack strategy implemented
-⏳ Pulumi backend migration needed
-⏳ GitHub secrets configuration needed
+### Release-Based Deployments
+
+The workflow triggers on **GitHub Releases** (not on every push):
+
+- **Production (`main` stack)**: Create a release from the `main` branch
+- **Development (`dev` stack)**: Create a release from the `dev` branch
+- **Manual**: Use "Run workflow" button in GitHub Actions for ad-hoc deployments
+
+**Why release-based?**
+
+- Controlled, intentional deployments
+- Semantic versioning integration
+- Clear deployment history
+- Prevents accidental infrastructure changes
+
+### Creating a Release
+
+```bash
+# Via GitHub CLI
+gh release create v1.0.0 --target main --title "Production v1.0.0" --notes "Release notes here"
+
+# Or via GitHub UI
+# Go to: Releases → Draft a new release → Choose tag and target branch → Publish
+```
+
+## Accessing Deployment Outputs
+
+### Environment Variables (Recommended)
+
+After each deployment, key outputs are saved as GitHub **environment variables** scoped to the branch:
+
+**Available variables per environment (main/dev):**
+
+- `FUNCTION_URL` - Lambda function URL
+- `CODEBUILD_PROJECT_NAME` - CodeBuild project name
+- `LAMBDA_FUNCTION_NAME` - Lambda function name
+- `ECR_REPOSITORY_URL` - ECR repository URL
+
+**Access in workflows:**
+
+```yaml
+jobs:
+  use-outputs:
+    runs-on: ubuntu-latest
+    environment: main # or dev
+    steps:
+      - name: Use outputs
+        run: |
+          echo "Function URL: ${{ vars.FUNCTION_URL }}"
+          echo "CodeBuild: ${{ vars.CODEBUILD_PROJECT_NAME }}"
+```
+
+**Access via CLI:**
+
+```bash
+# List all variables for an environment
+gh variable list --env main
+
+# Get a specific variable
+gh variable get FUNCTION_URL --env main
+
+# Use in scripts
+FUNCTION_URL=$(gh variable get FUNCTION_URL --env main)
+curl "$FUNCTION_URL"
+```
+
+### Job Summary
+
+Each deployment also creates a detailed Job Summary visible in the Actions run UI with:
+
+- Stack outputs table
+- Quick links to Lambda function and Pulumi Console
+- Deployment metadata
 
 ## Branch-to-Stack Mapping
 

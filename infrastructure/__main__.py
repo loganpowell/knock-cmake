@@ -24,10 +24,37 @@ import os
 import shutil
 import yaml
 import json
+from pathlib import Path
 import pulumi
 from pulumi import Output
 import pulumi_aws as aws
 import pulumi_command as command
+
+
+# Load .env file if it exists (for local development)
+def load_env_file():
+    """Load environment variables from .env file in workspace root"""
+    # Workspace root is one level up from infrastructure directory (where Pulumi.yaml is)
+    workspace_root = Path(__file__).parent.parent
+    env_path = workspace_root / ".env"
+
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                # Skip comments and empty lines
+                if line and not line.startswith("#"):
+                    # Handle KEY=VALUE format
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        key = key.strip()
+                        value = value.strip()
+                        # Only set if not already in environment
+                        if key and value and key not in os.environ:
+                            os.environ[key] = value
+
+
+load_env_file()
 from config import (
     PROJECT_NAME,
     STACK_NAME,
@@ -162,20 +189,12 @@ def get_validated_buildspec():
 # Configuration imported from config.py
 # aws_region, project_name, stack_name, etc. are now available
 
-# Create Pulumi config instance for reading Docker Hub credentials
-pulumi_config = pulumi.Config()
-
-# Get Docker Hub credentials from Pulumi config (environment variables)
+# Get Docker Hub credentials from environment variables
 # These can be set via:
-# - Local: pulumi config set dockerHubUsername <username> --secret
-# - Local: pulumi config set dockerHubToken <token> --secret
-# - Or via environment variables: DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN
-docker_hub_username = pulumi_config.get("dockerHubUsername") or os.environ.get(
-    "DOCKER_HUB_USERNAME"
-)
-docker_hub_token = pulumi_config.get_secret("dockerHubToken") or os.environ.get(
-    "DOCKER_HUB_TOKEN"
-)
+# - Local: .env file (DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN)
+# - CI/CD: GitHub Secrets (DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN)
+docker_hub_username = os.environ.get("DOCKER_HUB_USERNAME")
+docker_hub_token = os.environ.get("DOCKER_HUB_TOKEN")
 
 # Initialize variables for conditional resources
 docker_hub_secret_arn = None
