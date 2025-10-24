@@ -31,16 +31,21 @@ gh release create v1.0.0 --target main --title "Production v1.0.0" --notes "Rele
 
 ## Accessing Deployment Outputs
 
-### Environment Variables (Recommended)
+### Repository Variables (Recommended)
 
-After each deployment, key outputs are saved as GitHub **environment variables** scoped to the branch:
+After each deployment, key outputs are saved as GitHub **repository variables** with branch prefixes:
 
-**Available variables per environment (main/dev):**
+**Naming Convention:**
 
-- `FUNCTION_URL` - Lambda function URL
-- `CODEBUILD_PROJECT_NAME` - CodeBuild project name
-- `LAMBDA_FUNCTION_NAME` - Lambda function name
-- `ECR_REPOSITORY_URL` - ECR repository URL
+- Main stack: `MAIN_FUNCTION_URL`, `MAIN_CODEBUILD_PROJECT_NAME`, etc.
+- Dev stack: `DEV_FUNCTION_URL`, `DEV_CODEBUILD_PROJECT_NAME`, etc.
+
+**Available variables:**
+
+- `{BRANCH}_FUNCTION_URL` - Lambda function URL
+- `{BRANCH}_CODEBUILD_PROJECT_NAME` - CodeBuild project name
+- `{BRANCH}_LAMBDA_FUNCTION_NAME` - Lambda function name
+- `{BRANCH}_ECR_REPOSITORY_URL` - ECR repository URL
 
 **Access in workflows:**
 
@@ -48,25 +53,29 @@ After each deployment, key outputs are saved as GitHub **environment variables**
 jobs:
   use-outputs:
     runs-on: ubuntu-latest
-    environment: main # or dev
     steps:
-      - name: Use outputs
+      - name: Use main outputs
         run: |
-          echo "Function URL: ${{ vars.FUNCTION_URL }}"
-          echo "CodeBuild: ${{ vars.CODEBUILD_PROJECT_NAME }}"
+          echo "Function URL: ${{ vars.MAIN_FUNCTION_URL }}"
+          echo "CodeBuild: ${{ vars.MAIN_CODEBUILD_PROJECT_NAME }}"
+
+      - name: Use dev outputs
+        run: |
+          echo "Function URL: ${{ vars.DEV_FUNCTION_URL }}"
 ```
 
 **Access via CLI:**
 
 ```bash
-# List all variables for an environment
-gh variable list --env main
+# List all repository variables
+gh variable list
 
 # Get a specific variable
-gh variable get FUNCTION_URL --env main
+gh variable get MAIN_FUNCTION_URL
+gh variable get DEV_FUNCTION_URL
 
 # Use in scripts
-FUNCTION_URL=$(gh variable get FUNCTION_URL --env main)
+FUNCTION_URL=$(gh variable get MAIN_FUNCTION_URL)
 curl "$FUNCTION_URL"
 ```
 
