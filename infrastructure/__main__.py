@@ -170,7 +170,7 @@ def get_validated_buildspec():
     """Load and validate the buildspec YAML from file"""
 
     # Path to the buildspec file
-    buildspec_path = os.path.join(os.path.dirname(__file__), "shell", "buildspec.yml")
+    buildspec_path = os.path.join(os.path.dirname(__file__), "buildspec.yml")
 
     try:
         with open(buildspec_path, "r") as f:
@@ -476,6 +476,12 @@ codebuild_project = aws.codebuild.Project(
             ),
             aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                 name="AWS_DEFAULT_REGION", value=AWS_REGION
+            ),
+            aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
+                name="ECR_REGISTRY_URL",
+                value=ecr_repo.repository_url.apply(
+                    lambda url: url.split("/")[0]
+                ),
             ),
         ],
     ),

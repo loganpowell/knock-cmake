@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - chmod +x infrastructure/shell/buildspec_steps/pre-build.sh
+      - ./infrastructure/shell/buildspec_steps/pre-build.sh
+  build:
+    commands:
+      - chmod +x infrastructure/shell/buildspec_steps/build.sh
+      - ./infrastructure/shell/buildspec_steps/build.sh
+  post_build:
+    commands:
+      - chmod +x infrastructure/shell/buildspec_steps/post-build.sh
+      - ./infrastructure/shell/buildspec_steps/post-build.sh

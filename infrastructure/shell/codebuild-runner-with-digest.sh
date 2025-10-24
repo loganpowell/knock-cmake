@@ -168,7 +168,7 @@ if [ -n "$ECR_REPO_NAME" ]; then
         echo "$IMAGE_URI_WITH_DIGEST" > "$OUTPUT_FILE"
         log_success "Image URI saved to $OUTPUT_FILE"
     else
-        echo "⚠️  Could not get image digest"
+        echo "⚠️ Could not get image digest"
         echo ""
         echo "🔧 DEBUG COMMAND:"
         echo "aws ecr describe-images --repository-name $ECR_REPO_NAME --region $AWS_REGION"
