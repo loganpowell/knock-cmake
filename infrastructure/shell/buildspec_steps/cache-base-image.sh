@@ -9,24 +9,49 @@ echo "=== CACHING DEBIAN BASE IMAGE ==="
 
 # Get the current digest for debian:bookworm-slim
 echo "Getting current Debian digest..."
-DEBIAN_DIGEST=$(docker manifest inspect debian:bookworm-slim --verbose 2>/dev/null | \
-    jq -r '.Descriptor.digest // .manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest' | \
-    head -1)
 
+# First try to get the digest directly from a pull
+echo "Pulling debian:bookworm-slim to get digest..."
+docker pull debian:bookworm-slim >/dev/null 2>&1 || true
+
+# Get the digest from the local image
+DEBIAN_DIGEST=$(docker inspect debian:bookworm-slim --format='{{range .RepoDigests}}{{.}}{{end}}' 2>/dev/null | head -1 | cut -d'@' -f2)
+
+# If that fails, try manifest inspect with simpler parsing
 if [ -z "$DEBIAN_DIGEST" ] || [ "$DEBIAN_DIGEST" = "null" ]; then
-    echo "Could not get digest from manifest, falling back to docker pull..."
-    docker pull debian:bookworm-slim >/dev/null 2>&1
-    DEBIAN_DIGEST=$(docker inspect debian:bookworm-slim --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
+    echo "Trying docker manifest inspect..."
+    # Try to get manifest and parse more robustly
+    MANIFEST_OUTPUT=$(docker manifest inspect debian:bookworm-slim --verbose 2>/dev/null || echo "")
+    if [ -n "$MANIFEST_OUTPUT" ]; then
+        # Try different parsing approaches
+        DEBIAN_DIGEST=$(echo "$MANIFEST_OUTPUT" | jq -r '.manifests[]? | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest' 2>/dev/null | head -1)
+        if [ -z "$DEBIAN_DIGEST" ] || [ "$DEBIAN_DIGEST" = "null" ]; then
+            DEBIAN_DIGEST=$(echo "$MANIFEST_OUTPUT" | jq -r '.Descriptor.digest // empty' 2>/dev/null)
+        fi
+    fi
 fi
 
+# Final fallback - use latest tag
 if [ -z "$DEBIAN_DIGEST" ] || [ "$DEBIAN_DIGEST" = "null" ]; then
-    echo "Warning: Could not determine Debian digest, skipping base image cache"
+    echo "Could not determine specific digest, using latest tag"
+    DEBIAN_DIGEST="latest"
+fi
+
+if [ -z "$DEBIAN_DIGEST" ] || [ "$DEBIAN_DIGEST" = "null" ] || [ "$DEBIAN_DIGEST" = "latest" ]; then
+    echo "Warning: Could not determine specific Debian digest, skipping base image cache"
+    echo "Will use debian:bookworm-slim directly during build"
     exit 0
 fi
 
-SOURCE_IMAGE="debian:bookworm-slim@${DEBIAN_DIGEST}"
-SHORT_DIGEST="${DEBIAN_DIGEST##*:}"
-SHORT_DIGEST="${SHORT_DIGEST:0:12}"
+# Handle both actual digest and latest tag
+if [ "$DEBIAN_DIGEST" = "latest" ]; then
+    SOURCE_IMAGE="debian:bookworm-slim"
+    SHORT_DIGEST="latest"
+else
+    SOURCE_IMAGE="debian:bookworm-slim@${DEBIAN_DIGEST}"
+    SHORT_DIGEST="${DEBIAN_DIGEST##*:}"
+    SHORT_DIGEST="${SHORT_DIGEST:0:12}"
+fi
 
 # Use environment variables set by CodeBuild
 BASE_IMAGE_TAG="knock-base:debian-bookworm-slim"
