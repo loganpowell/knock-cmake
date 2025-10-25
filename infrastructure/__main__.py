@@ -34,6 +34,47 @@ import pulumi_command as command
 # Infrastructure reads from environment variables (set by GitHub Actions or loaded via gh CLI)
 # No local .env files are used for security reasons - all secrets come from GitHub
 
+# Get repository information dynamically
+# In GitHub Actions: GITHUB_REPOSITORY is automatically set (e.g., "loganpowell/knock-lambda")
+# Locally: Can be inferred from git remote or set manually
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")
+if not GITHUB_REPOSITORY:
+    # Try to get from git remote when running locally
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        git_url = result.stdout.strip()
+        # Extract org/repo from GitHub URL (supports both HTTPS and SSH)
+        if "github.com" in git_url:
+            if git_url.startswith("git@"):
+                # SSH: git@github.com:loganpowell/knock-lambda.git
+                repo_part = git_url.split(":")[-1].replace(".git", "")
+            else:
+                # HTTPS: https://github.com/loganpowell/knock-lambda.git
+                repo_part = git_url.split("github.com/")[-1].replace(".git", "")
+            GITHUB_REPOSITORY = repo_part
+    except:
+        # Fallback - will need to be set manually
+        GITHUB_REPOSITORY = "loganpowell/knock-lambda"
+        pulumi.log.warn(f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}")
+
+# Parse organization and repository name
+if GITHUB_REPOSITORY:
+    GITHUB_ORG, GITHUB_REPO = GITHUB_REPOSITORY.split("/", 1)
+else:
+    GITHUB_ORG, GITHUB_REPO = "loganpowell", "knock-lambda"
+    GITHUB_REPOSITORY = f"{GITHUB_ORG}/{GITHUB_REPO}"
+    pulumi.log.warn(f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}")
+
+pulumi.log.info(f"🏢 GitHub Organization: {GITHUB_ORG}")
+pulumi.log.info(f"📦 Repository: {GITHUB_REPO}")
+pulumi.log.info(f"🔗 Full Repository: {GITHUB_REPOSITORY}")
+
 from config import (
     PROJECT_NAME,
     STACK_NAME,
@@ -243,8 +284,10 @@ github_actions_role = aws.iam.Role(
                             "StringLike": {
                                 # Allow access from main and dev branches
                                 "token.actions.githubusercontent.com:sub": [
-                                    "repo:loganpowell/knock-lambda:ref:refs/heads/main",
-                                    "repo:loganpowell/knock-lambda:ref:refs/heads/dev",
+                                    f"repo:{GITHUB_REPOSITORY}:ref:refs/heads/main",
+                                    f"repo:{GITHUB_REPOSITORY}:ref:refs/heads/dev",
+                                    # Allow releases targeting main or dev branches
+                                    f"repo:{GITHUB_REPOSITORY}:ref:refs/tags/*",
                                 ]
                             },
                         },
@@ -270,9 +313,9 @@ pulumi_esc_role = aws.iam.Role(
                         "Action": "sts:AssumeRoleWithWebIdentity",
                         "Condition": {
                             "StringEquals": {
-                                "api.pulumi.com/oidc:aud": "loganpowell",
+                                "api.pulumi.com/oidc:aud": GITHUB_ORG,
                                 # Allow access from your Pulumi organization and this environment
-                                "api.pulumi.com/oidc:sub": f"pulumi:environments:org:loganpowell:env:knock-lambda-esc",
+                                "api.pulumi.com/oidc:sub": f"pulumi:environments:org:{GITHUB_ORG}:env:{GITHUB_REPO}-esc",
                             }
                         },
                     }

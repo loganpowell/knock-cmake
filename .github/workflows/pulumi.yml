@@ -46,9 +46,9 @@ jobs:
           fi
 
           STACK_NAME="$BRANCH_NAME"
-          echo "stack_name=loganpowell/knock-lambda/$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "stack_name=${{ github.repository }}/$STACK_NAME" >> $GITHUB_OUTPUT
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
+          echo "Deploying to stack: ${{ github.repository }}/$STACK_NAME"
           echo "Branch: $BRANCH_NAME"
 
       - name: Get OIDC Role ARN
@@ -58,6 +58,16 @@ jobs:
           ROLE_ARN=$(pulumi stack output github_actions_role_arn --stack ${{ steps.stack.outputs.stack_name }})
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
           echo "Using OIDC Role: $ROLE_ARN"
+
+      - name: Debug OIDC Context
+        run: |
+          echo "🔍 GitHub Actions OIDC Context Debug:"
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Expected sub: repo:${{ github.repository }}:ref:${{ github.ref }}"
+          echo "Expected role: ${{ steps.oidc.outputs.role_arn }}"
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -105,7 +115,7 @@ jobs:
                   echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "- [Lambda Function URL]($FUNCTION_URL)" >> $GITHUB_STEP_SUMMARY
-                  echo "- [Pulumi Console](https://app.pulumi.com/loganpowell/knock-lambda/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+                  echo "- [Pulumi Console](https://app.pulumi.com/${{ github.repository }}/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
               fi
           else
               echo "No outputs available for this stack." >> $GITHUB_STEP_SUMMARY
