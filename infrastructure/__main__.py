@@ -358,6 +358,12 @@ infrastructure_policy = aws.iam.Policy(
                         "iam:DeleteRolePolicy",
                         "iam:ListRolePolicies",
                         "iam:ListAttachedRolePolicies",
+                        # OIDC Provider permissions
+                        "iam:CreateOpenIDConnectProvider",
+                        "iam:UpdateOpenIDConnectProviderThumbprint",
+                        "iam:DeleteOpenIDConnectProvider",
+                        "iam:GetOpenIDConnectProvider",
+                        "iam:ListOpenIDConnectProviders",
                         # Secrets Manager permissions
                         "secretsmanager:*",
                         # CloudWatch Logs permissions
