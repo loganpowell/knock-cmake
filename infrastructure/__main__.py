@@ -31,30 +31,9 @@ import pulumi_aws as aws
 import pulumi_command as command
 
 
-# Load .env file if it exists (for local development)
-def load_env_file():
-    """Load environment variables from .env file in workspace root"""
-    # Workspace root is one level up from infrastructure directory (where Pulumi.yaml is)
-    workspace_root = Path(__file__).parent.parent
-    env_path = workspace_root / ".env"
+# Infrastructure reads from environment variables (set by GitHub Actions or loaded via gh CLI)
+# No local .env files are used for security reasons - all secrets come from GitHub
 
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                # Skip comments and empty lines
-                if line and not line.startswith("#"):
-                    # Handle KEY=VALUE format
-                    if "=" in line:
-                        key, value = line.split("=", 1)
-                        key = key.strip()
-                        value = value.strip()
-                        # Only set if not already in environment
-                        if key and value and key not in os.environ:
-                            os.environ[key] = value
-
-
-load_env_file()
 from config import (
     PROJECT_NAME,
     STACK_NAME,
@@ -70,6 +49,10 @@ from config import (
     CODEBUILD_RETRY_DELAY,
     CODEBUILD_TIMEOUT_MINUTES,
 )
+
+# Log configuration for debugging
+pulumi.log.info(f"🌍 Deployment Region: {AWS_REGION}")
+pulumi.log.info(f"🏗️  Project: {PROJECT_NAME}, Stack: {STACK_NAME}")
 
 
 def get_shell_command():
@@ -190,55 +173,181 @@ def get_validated_buildspec():
 # aws_region, project_name, stack_name, etc. are now available
 
 # Get Docker Hub credentials from environment variables
-# These can be set via:
-# - Local: .env file (DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN)
-# - CI/CD: GitHub Secrets (DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN)
+# These are automatically loaded from GitHub secrets via config.py
 docker_hub_username = os.environ.get("DOCKER_HUB_USERNAME")
 docker_hub_token = os.environ.get("DOCKER_HUB_TOKEN")
 
 # Initialize variables for conditional resources
-docker_hub_secret_arn = None
-docker_hub_cache_rule = None
-docker_hub_cache_enabled = False
+docker_hub_cache_enabled = bool(docker_hub_username and docker_hub_token)
 
-# Only create Docker Hub resources if credentials are provided
-if docker_hub_username and docker_hub_token:
-    # Reference the existing Docker Hub credentials secret in Secrets Manager
-    # The sync-pulumi-gh-docker.sh script creates this secret
-    try:
-        docker_hub_secret = aws.secretsmanager.get_secret(
-            name="ecr-pullthroughcache/docker-hub"
-        )
-        docker_hub_secret_arn = docker_hub_secret.arn
-
-        # Try to import existing pull-through cache rule, or create if it doesn't exist
-        # Pull-through cache rules are account-wide, so we check if one exists first
-        # Using import_=<id> tells Pulumi to adopt an existing resource instead of creating a new one
-        docker_hub_cache_rule = aws.ecr.PullThroughCacheRule(
-            "docker-hub-cache",
-            ecr_repository_prefix="docker-hub",
-            upstream_registry_url="registry-1.docker.io",
-            credential_arn=docker_hub_secret_arn,
-            opts=pulumi.ResourceOptions(
-                import_="docker-hub",  # Import if exists, create if doesn't
-                protect=True,
-            ),
-        )
-
-        docker_hub_cache_enabled = True
-        pulumi.log.info("✅ Docker Hub pull-through cache enabled")
-    except Exception as e:
-        pulumi.log.warn(f"⚠️  Docker Hub secret not found in Secrets Manager: {e}")
-        pulumi.log.warn("   Run: ./scripts/sync-pulumi-gh-docker.sh")
-        docker_hub_cache_enabled = False
+# Log Docker Hub cache status
+if docker_hub_cache_enabled:
+    pulumi.log.info(
+        "✅ Docker Hub credentials found - pull-through cache will be enabled"
+    )
 else:
     pulumi.log.warn(
         "⚠️  Docker Hub credentials not provided - pull-through cache will not be enabled"
     )
     pulumi.log.warn(
-        "Set DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN environment variables to enable caching"
+        "   Run 'uv run setup' to configure GitHub secrets including Docker Hub credentials"
     )
-    docker_hub_cache_enabled = False
+
+# =============================================================================
+# OIDC CONFIGURATION FOR SECURE AUTHENTICATION
+# =============================================================================
+
+# Get current AWS account ID for OIDC configuration
+current_identity = aws.get_caller_identity()
+account_id = current_identity.account_id
+
+# GitHub OIDC Provider for GitHub Actions
+github_oidc_provider = aws.iam.OpenIdConnectProvider(
+    "github-oidc-provider",
+    url="https://token.actions.githubusercontent.com",
+    client_id_lists=["sts.amazonaws.com"],
+    thumbprint_lists=[
+        # GitHub Actions OIDC thumbprint - actual current thumbprint
+        "7560D6F40FA55195F740EE2B1B7C0B4836CBE103"
+    ],
+)
+
+# Pulumi Cloud OIDC Provider for Pulumi ESC
+pulumi_oidc_provider = aws.iam.OpenIdConnectProvider(
+    "pulumi-oidc-provider",
+    url="https://api.pulumi.com/oidc",
+    client_id_lists=["pulumi"],
+    thumbprint_lists=[
+        # Pulumi Cloud OIDC thumbprint - actual current thumbprint
+        "1FD8EF1F201E9742EDD2FC2A15C167036938D1A9"
+    ],
+)
+
+# IAM Role for GitHub Actions OIDC authentication
+github_actions_role = aws.iam.Role(
+    "github-actions-role",
+    name=f"{PROJECT_NAME}-github-actions-{STACK_NAME}",
+    assume_role_policy=pulumi.Output.all(github_oidc_provider.arn, account_id).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Federated": args[0]},  # GitHub OIDC provider ARN
+                        "Action": "sts:AssumeRoleWithWebIdentity",
+                        "Condition": {
+                            "StringEquals": {
+                                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                            },
+                            "StringLike": {
+                                # Allow access from main and dev branches
+                                "token.actions.githubusercontent.com:sub": [
+                                    "repo:loganpowell/knock-lambda:ref:refs/heads/main",
+                                    "repo:loganpowell/knock-lambda:ref:refs/heads/dev",
+                                ]
+                            },
+                        },
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+# IAM Role for Pulumi ESC OIDC authentication
+pulumi_esc_role = aws.iam.Role(
+    "pulumi-esc-role",
+    name=f"{PROJECT_NAME}-pulumi-esc-{STACK_NAME}",
+    assume_role_policy=pulumi.Output.all(pulumi_oidc_provider.arn, account_id).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Federated": args[0]},  # Pulumi OIDC provider ARN
+                        "Action": "sts:AssumeRoleWithWebIdentity",
+                        "Condition": {
+                            "StringEquals": {
+                                "api.pulumi.com/oidc:aud": "loganpowell",
+                                # Allow access from your Pulumi organization and this environment
+                                "api.pulumi.com/oidc:sub": f"pulumi:environments:org:loganpowell:env:knock-lambda-esc",
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+# Comprehensive IAM policy for infrastructure management
+infrastructure_policy = aws.iam.Policy(
+    "infrastructure-policy",
+    name=f"{PROJECT_NAME}-infrastructure-{STACK_NAME}",
+    description="Policy for GitHub Actions and Pulumi ESC to manage knock-lambda infrastructure",
+    policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        # ECR permissions
+                        "ecr:*",
+                        # CodeBuild permissions
+                        "codebuild:*",
+                        # Lambda permissions
+                        "lambda:*",
+                        # S3 permissions
+                        "s3:*",
+                        # IAM permissions (limited)
+                        "iam:GetRole",
+                        "iam:GetRolePolicy",
+                        "iam:PassRole",
+                        "iam:CreateRole",
+                        "iam:DeleteRole",
+                        "iam:UpdateRole",
+                        "iam:AttachRolePolicy",
+                        "iam:DetachRolePolicy",
+                        "iam:PutRolePolicy",
+                        "iam:DeleteRolePolicy",
+                        "iam:ListRolePolicies",
+                        "iam:ListAttachedRolePolicies",
+                        # Secrets Manager permissions
+                        "secretsmanager:*",
+                        # CloudWatch Logs permissions
+                        "logs:*",
+                        # CloudFormation (used by Pulumi)
+                        "cloudformation:*",
+                        # STS (for role assumption)
+                        "sts:GetCallerIdentity",
+                        "sts:AssumeRole",
+                    ],
+                    "Resource": "*",
+                }
+            ],
+        }
+    ),
+)
+
+# Attach policy to both roles
+github_actions_policy_attachment = aws.iam.RolePolicyAttachment(
+    "github-actions-policy-attachment",
+    role=github_actions_role.name,
+    policy_arn=infrastructure_policy.arn,
+)
+
+pulumi_esc_policy_attachment = aws.iam.RolePolicyAttachment(
+    "pulumi-esc-policy-attachment",
+    role=pulumi_esc_role.name,
+    policy_arn=infrastructure_policy.arn,
+)
+
+# =============================================================================
+# MAIN INFRASTRUCTURE RESOURCES
+# =============================================================================
 
 # Create ECR repository for container images
 ecr_repo = aws.ecr.Repository(
@@ -279,6 +388,34 @@ ecr_lifecycle_policy = aws.ecr.LifecyclePolicy(
             ]
         },
         indent=4,
+    ),
+)
+
+# AWS Secrets Manager for Docker Hub credentials
+# This provides a centralized, secure storage for secrets that ESC can pull from
+docker_hub_secret = aws.secretsmanager.Secret(
+    "docker-hub-credentials",
+    name=f"{PROJECT_NAME}-docker-hub-credentials-{STACK_NAME}",
+    description="Docker Hub credentials for ECR pull-through cache",
+)
+
+# Secret version will be set via setup script or manually
+# ESC environment will pull from this secret
+docker_hub_secret_version = aws.secretsmanager.SecretVersion(
+    "docker-hub-credentials-version",
+    secret_id=docker_hub_secret.id,
+    secret_string=pulumi.Output.secret(
+        json.dumps(
+            {
+                "username": docker_hub_username or "placeholder-username",
+                "token": docker_hub_token or "placeholder-token",
+            }
+        )
+    ),
+    opts=pulumi.ResourceOptions(
+        # Only create the secret version if we have actual credentials
+        # Otherwise, it will be created manually or via setup script
+        depends_on=[docker_hub_secret]
     ),
 )
 
@@ -344,11 +481,6 @@ codebuild_policy = aws.iam.RolePolicy(
     policy=pulumi.Output.all(
         ecr_repo.arn,
         source_bucket.arn,
-        (
-            docker_hub_secret_arn
-            if docker_hub_secret_arn
-            else pulumi.Output.from_input("arn:aws:secretsmanager:*:*:secret:dummy")
-        ),
     ).apply(
         lambda args: json.dumps(
             {
@@ -387,18 +519,6 @@ codebuild_policy = aws.iam.RolePolicy(
                             "ecr:DescribePullThroughCacheRules",  # Needed to verify cache rules
                         ],
                         "Resource": "*",  # Pull-through cache creates dynamic repositories
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "secretsmanager:GetSecretValue",
-                        ],
-                        "Resource": (
-                            args[2]
-                            if len(args) > 2
-                            and args[2] != "arn:aws:secretsmanager:*:*:secret:dummy"
-                            else "arn:aws:secretsmanager:*:*:secret:dummy"
-                        ),  # Docker Hub secret ARN
                     },
                     {
                         "Effect": "Allow",
@@ -456,8 +576,6 @@ codebuild_dependencies = [
     source_bucket,
     public_ecr_cache_rule,
 ]
-if docker_hub_cache_enabled and docker_hub_cache_rule:
-    codebuild_dependencies.append(docker_hub_cache_rule)
 
 # Create CodeBuild project
 codebuild_project = aws.codebuild.Project(
@@ -549,8 +667,6 @@ lambda_s3_policy = aws.iam.RolePolicy(
 # Build dependency list for build command
 # Dependencies: Must wait for CodeBuild project and cache rules to be ready
 build_command_dependencies = [codebuild_project, source_object, public_ecr_cache_rule]
-if docker_hub_cache_enabled and docker_hub_cache_rule:
-    build_command_dependencies.append(docker_hub_cache_rule)
 
 # Trigger CodeBuild to build and push the Docker image
 # IMPORTANT: Only trigger on actual application code changes (Dockerfile, handler.py)
@@ -657,13 +773,7 @@ log_group = aws.cloudwatch.LogGroup(
 
 # Export important values
 pulumi.export("ecr_repository_url", ecr_repo.repository_url)
-if docker_hub_cache_enabled and docker_hub_cache_rule:
-    pulumi.export(
-        "docker_hub_cache_prefix", docker_hub_cache_rule.ecr_repository_prefix
-    )
 pulumi.export("public_ecr_cache_prefix", public_ecr_cache_rule.ecr_repository_prefix)
-if docker_hub_cache_enabled and docker_hub_secret_arn:
-    pulumi.export("docker_hub_secret_arn", docker_hub_secret_arn)
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
 pulumi.export("function_url", function_url.function_url)
@@ -672,3 +782,7 @@ pulumi.export("output_bucket", output_bucket.bucket)
 pulumi.export("device_credentials_bucket", device_credentials_bucket.bucket)
 pulumi.export("codebuild_project_name", codebuild_project.name)
 pulumi.export("codebuild_run_id", build_command.id)
+
+# Export OIDC Role ARNs for authentication configuration
+pulumi.export("github_actions_role_arn", github_actions_role.arn)
+pulumi.export("pulumi_esc_role_arn", pulumi_esc_role.arn)

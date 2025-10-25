@@ -1,1 +1,2 @@
-{}
+environment:
+  - default/knock-lambda-esc

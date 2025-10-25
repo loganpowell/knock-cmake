@@ -28,8 +28,44 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 
 - [uv](https://docs.astral.sh/uv/) - Python package manager
 - [Pulumi](https://www.pulumi.com/docs/get-started/install/) - Infrastructure as Code
+- [Pulumi ESC CLI](https://www.pulumi.com/docs/esc/cli/) - For environment management (`pulumi plugin install esc`)
 - AWS CLI configured with appropriate credentials
+- [GitHub CLI](https://cli.github.com/) - For GitHub Actions setup (optional)
 - **Note**: Docker is NOT required locally - builds happen in AWS CodeBuild
+
+### Initial Setup
+
+For first-time setup or when onboarding new developers, run the comprehensive setup script:
+
+```bash
+# Clone and enter the repository
+git clone <repo-url>
+cd knock-lambda
+
+# Install dependencies
+uv sync
+
+# Run the comprehensive setup script
+uv run setup
+```
+
+This interactive setup script will:
+
+- **Configure Pulumi ESC** for centralized environment management
+- **Set up AWS credentials** in ESC environment for local development
+- **Configure Docker Hub credentials** in ESC environment
+- **Optionally configure GitHub Actions** with repository secrets for CI/CD
+- **Install Git hooks** for development workflow
+
+**Security Model**:
+
+- **Local Development**: Uses Pulumi ESC for convenient credential management
+- **CI/CD Pipeline**: Uses OIDC authentication for passwordless AWS access + ESC for Docker Hub credentials
+- **Pure ESC + OIDC**: No stored AWS credentials, secure token-based authentication
+
+**For Local Development**: After running setup, your ESC environment will be automatically configured. The infrastructure will load credentials from ESC.
+
+**For CI/CD**: GitHub Actions workflow uses OIDC roles for AWS authentication and ESC for Docker Hub credentials. Only `VARIABLE_EDITING_PAT` is stored as a GitHub secret.
 
 ### Deploy to AWS
 
@@ -41,8 +77,8 @@ cd knock-lambda
 # 2. Install dependencies
 uv sync
 
-# 3. Activate environment
-uv shell
+# 3. Run setup to configure ESC and optionally GitHub Actions
+uv run setup
 
 # 4. Navigate to infrastructure and deploy
 cd infrastructure

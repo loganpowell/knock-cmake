@@ -12,6 +12,9 @@ jobs:
   deploy:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Required for OIDC
+      contents: read # Required for checkout
     steps:
       - uses: actions/checkout@v4
 
@@ -26,12 +29,10 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure ESC Environment
+        uses: pulumi/esc-action@v1.5.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          environment: default/knock-lambda-esc
 
       - name: Determine Stack Name
         id: stack
@@ -50,15 +51,27 @@ jobs:
           echo "Deploying to stack: loganpowell/knock-lambda/$STACK_NAME"
           echo "Branch: $BRANCH_NAME"
 
+      - name: Get OIDC Role ARN
+        id: oidc
+        run: |
+          # Get the GitHub Actions OIDC role ARN for this stack
+          ROLE_ARN=$(pulumi stack output github_actions_role_arn --stack ${{ steps.stack.outputs.stack_name }})
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "Using OIDC Role: $ROLE_ARN"
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.oidc.outputs.role_arn }}
+          role-session-name: GitHubActions-PulumiDeploy
+          aws-region: us-east-2
+
       - name: Pulumi Up
         uses: pulumi/actions@v6.6.0
         id: pulumi
         with:
           command: up
           stack-name: ${{ steps.stack.outputs.stack_name }}
-        env:
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Generate Job Summary
         if: always()

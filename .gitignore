@@ -48,3 +48,4 @@ wheels/
 *.acsm
 .migration-backup
 tests/results/
+.env.old
