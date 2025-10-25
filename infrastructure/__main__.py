@@ -42,11 +42,12 @@ if not GITHUB_REPOSITORY:
     # Try to get from git remote when running locally
     try:
         import subprocess
+
         result = subprocess.run(
-            ["git", "config", "--get", "remote.origin.url"], 
-            capture_output=True, 
-            text=True, 
-            check=True
+            ["git", "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         git_url = result.stdout.strip()
         # Extract org/repo from GitHub URL (supports both HTTPS and SSH)
@@ -61,7 +62,9 @@ if not GITHUB_REPOSITORY:
     except:
         # Fallback - will need to be set manually
         GITHUB_REPOSITORY = "loganpowell/knock-lambda"
-        pulumi.log.warn(f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}")
+        pulumi.log.warn(
+            f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}"
+        )
 
 # Parse organization and repository name
 if GITHUB_REPOSITORY:
@@ -69,7 +72,9 @@ if GITHUB_REPOSITORY:
 else:
     GITHUB_ORG, GITHUB_REPO = "loganpowell", "knock-lambda"
     GITHUB_REPOSITORY = f"{GITHUB_ORG}/{GITHUB_REPO}"
-    pulumi.log.warn(f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}")
+    pulumi.log.warn(
+        f"Could not determine GitHub repository, using fallback: {GITHUB_REPOSITORY}"
+    )
 
 pulumi.log.info(f"🏢 GitHub Organization: {GITHUB_ORG}")
 pulumi.log.info(f"📦 Repository: {GITHUB_REPO}")
