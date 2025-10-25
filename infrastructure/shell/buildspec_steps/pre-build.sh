@@ -34,9 +34,8 @@ echo "Getting ECR login using ECR region"
 aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URL
 echo "Successfully logged in to ECR"
 
-# Temporarily disable base image caching to debug build issues
-echo "⚠️ Base image caching temporarily disabled for debugging"
-# chmod +x infrastructure/shell/buildspec_steps/cache-base-image.sh || true
-# ./infrastructure/shell/buildspec_steps/cache-base-image.sh || echo "⚠️ Base image caching skipped, but continuing build..."
+echo "Caching Debian base image to private ECR for faster builds"
+chmod +x infrastructure/shell/buildspec_steps/cache-base-image.sh
+./infrastructure/shell/buildspec_steps/cache-base-image.sh || echo "⚠️ Base image caching failed, but continuing build..."
 
 echo "Pre-build phase complete"
