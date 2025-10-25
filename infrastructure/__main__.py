@@ -479,9 +479,7 @@ codebuild_project = aws.codebuild.Project(
             ),
             aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                 name="ECR_REGISTRY_URL",
-                value=ecr_repo.repository_url.apply(
-                    lambda url: url.split("/")[0]
-                ),
+                value=ecr_repo.repository_url.apply(lambda url: url.split("/")[0]),
             ),
         ],
     ),

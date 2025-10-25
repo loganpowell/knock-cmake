@@ -34,8 +34,8 @@ echo "Getting ECR login using ECR region"
 aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URL
 echo "Successfully logged in to ECR"
 
-echo "Ensuring pull-through cache repository exists"
-chmod +x infrastructure/shell/buildspec_steps/setup-pull-through-cache.sh
-./infrastructure/shell/buildspec_steps/setup-pull-through-cache.sh
+echo "Caching Debian base image to private ECR for faster builds"
+chmod +x infrastructure/shell/buildspec_steps/cache-base-image.sh
+./infrastructure/shell/buildspec_steps/cache-base-image.sh
 
 echo "Pre-build phase complete"

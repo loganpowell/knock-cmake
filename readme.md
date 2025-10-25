@@ -55,45 +55,129 @@ After deployment, you'll receive a Lambda function URL for making conversion req
 
 ```bash
 # Convert an ACSM file
-curl -X POST https://your-lambda-url.lambda-url.us-east-1.on.aws/ \
+curl -X POST https://random-lambda-uid.lambda-url.us-east-1.on.aws/ \
   -H "Content-Type: application/json" \
   -d '{"acsm_content": "<ACSM file content>"}'
 
-# Response includes S3 download URL for converted file
+# Response includes presigned S3 download URL for converted file (valid for 1 hour)
 ```
 
-See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for complete API documentation.
+## 📁 Project Structure
+
+```
+knock-lambda/
+├── infrastructure/          # Pulumi infrastructure code
+│   ├── __main__.py         # Main infrastructure definition
+│   ├── lambda/             # Lambda function code
+│   │   ├── handler.py      # Python Lambda handler
+│   │   └── Dockerfile      # Container image definition
+│   ├── README.md           # Deployment documentation
+│   └── CONFIG.md           # Configuration options
+├── deps/                    # Local C++ dependencies (committed)
+│   ├── libgourou/          # Adobe DRM library
+│   └── uPDFParser/         # PDF parser
+├── knock/                   # Knock application source
+│   ├── src/knock.cpp       # Main C++ implementation
+│   └── CMakeLists.txt
+├── config/                  # CMake build configurations
+├── assets/                  # Source tarballs for dependencies
+├── tests/                   # Test suite (pytest + shell scripts)
+├── docs/                    # Additional documentation
+├── build_container.py       # Local build script
+├── CMakeLists.txt          # Top-level CMake config
+├── pyproject.toml          # Python project configuration
+└── README.md               # This file
+```
 
 ## 🏗 Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Client    │────▶│    Lambda    │────▶│  S3 Output  │
-│  (HTTP)     │     │  (Container) │     │   Bucket    │
-└─────────────┘     └──────────────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │   Knock C++  │
-                    │    Binary    │
-                    └──────────────┘
+Build & Deployment Pipeline (CI/CD):
+┌────────────────────────────────────────────────────────┐
+│                    Build Pipeline                      │
+│                                                        │
+│ ┌─────────────┐    ┌─────────────┐    ┌──────────────┐ │
+│ │   Source    │---▶│  CodeBuild  │---▶│     ECR      │ │
+│ │   Bucket    │    │   Project   │    │  Repository  │ │
+│ │ (S3 + Code) │    │             │    │              │ │
+│ └─────────────┘    └─────────────┘    └──────────────┘ │
+│        ▲                  │                            │
+│        │                  ▼                            │
+│ ┌─────────────┐    ┌─────────────┐                     │
+│ │Pull-Through │    │  CloudWatch │                     │
+│ │    Cache    │    │   (Logs)    │                     │
+│ │(Docker Hub) │    │             │                     │
+│ └─────────────┘    └─────────────┘                     │
+└────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+                     ┌─────────────┐
+                     │   Pulumi    │
+                     │   (IaaC)    │
+                     └─────────────┘
+                            │
+                            ▼
+                 Updates Lambda Function
+                 with new container image
+
+Runtime Flow (User Requests):
+ ┌──────────┐     ┌──────────────────┐     ┌─────────────┐
+ │  Client  │----▶│  Lambda Function │----▶│  S3 Output  │
+ │  (HTTP)  │     │    (Container)   │     │   Bucket    │
+ └──────────┘     └──────────────────┘     └─────────────┘
+                            │
+                            ▼
+                  ┌──────────────────┐
+                  │   Knock C++ +    │
+                  │ Python Handler   │
+                  └──────────────────┘
+                            │
+                            ▼
+                ┌───────────────────────┐
+                │ S3 Device Credentials │
+                │        Bucket         │
+                └───────────────────────┘
 ```
+
+See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for complete API documentation.
 
 **Key Components:**
 
+### Runtime Infrastructure
+
 - **AWS Lambda**: Container-based function with Knock binary and Python handler
+- **Lambda Function URL**: Public HTTP endpoint with CORS support
+- **S3 Output Bucket**: Temporary storage for converted files with lifecycle policies
+- **S3 Device Credentials Bucket**: Persistent storage for Adobe device credentials
+- **CloudWatch Logs**: Lambda execution logs with configurable retention
+
+### Build Pipeline
+
 - **AWS CodeBuild**: Builds Docker images from source (no local Docker needed)
-- **AWS ECR**: Stores container images
-- **AWS S3**: Storage for output files and device credentials
-- **Pulumi**: Infrastructure as Code for automated deployment
+- **AWS ECR**: Private container registry with image lifecycle policies
+- **S3 Source Bucket**: Stores application source code for CodeBuild
+- **ECR Pull-Through Cache**: Caches public images (Docker Hub, AWS ECR Public)
+- **Docker Hub Integration**: Optional credentials for private image access
+
+### Security & Access
+
+- **IAM Roles**: Least-privilege access for Lambda and CodeBuild
+- **Secrets Manager**: Secure storage for Docker Hub credentials
+- **S3 Bucket Policies**: Fine-grained access control for file operations
+
+### Infrastructure Management
+
+- **Pulumi**: Infrastructure as Code for automated deployment and updates
+- **Cross-platform Scripts**: Shell utilities for build and deployment automation
 
 **Build Process:**
 
-1. C++ dependencies (libgourou, uPDFParser) are pre-extracted in `deps/` directory
-2. CMake builds static Knock binary from source
-3. Docker packages binary with Lambda Python runtime
-4. CodeBuild pushes image to ECR
-5. Lambda function deployed with container image
+1. **Local Development**: C++ dependencies (libgourou, uPDFParser) are pre-extracted in `deps/` directory
+2. **Source Upload**: Pulumi uploads source code and tracks changes to trigger rebuilds
+3. **Container Build**: CodeBuild uses CMake to build static Knock binary and packages with Lambda Python runtime
+4. **Image Deployment**: Built image is pushed to ECR with digest-based versioning
+5. **Lambda Update**: Function is updated with new container image and waits for deployment completion
+6. **Monitoring**: CloudWatch logs capture execution details and errors
 
 ## 📚 Documentation
 
@@ -130,33 +214,6 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 
 - **[instructions.md](instructions.md)** - Original project architecture and planning notes (archived)
 - **[WARP.md](WARP.md)** - AI assistant context and development guidelines
-
-## 📁 Project Structure
-
-```
-knock-lambda/
-├── infrastructure/          # Pulumi infrastructure code
-│   ├── __main__.py         # Main infrastructure definition
-│   ├── lambda/             # Lambda function code
-│   │   ├── handler.py      # Python Lambda handler
-│   │   └── Dockerfile      # Container image definition
-│   ├── README.md           # Deployment documentation
-│   └── CONFIG.md           # Configuration options
-├── deps/                    # Local C++ dependencies (committed)
-│   ├── libgourou/          # Adobe DRM library
-│   └── uPDFParser/         # PDF parser
-├── knock/                   # Knock application source
-│   ├── src/knock.cpp       # Main C++ implementation
-│   └── CMakeLists.txt
-├── config/                  # CMake build configurations
-├── assets/                  # Source tarballs for dependencies
-├── tests/                   # Test suite (pytest + shell scripts)
-├── docs/                    # Additional documentation
-├── build_container.py       # Local build script
-├── CMakeLists.txt          # Top-level CMake config
-├── pyproject.toml          # Python project configuration
-└── README.md               # This file
-```
 
 ## 🛠 Development
 

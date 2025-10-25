@@ -1,10 +1,22 @@
-# Stage 1: Build knock binary using Debian
+# Optimized Dockerfile for AWS Lambda Container Cold Start Performance
+# 
+# Key optimizations based on Lambda's convergent encryption and chunk caching:
+# 1. Use private ECR cached Debian base for fastest, most reliable builds
+# 2. Layer dependencies separately from application code
+# 3. Minimize unique bytes in each layer
+# 4. Clean package caches to reduce layer size
+# 
+# Lambda shares 512kb chunks across all users via convergent encryption.
+# Using private ECR eliminates Docker Hub rate limits and external dependencies.
+
+# Stage 1: Build knock binary using cached Debian base
 # Using libgourou v0.8.7 which requires OpenSSL 3.x support
-# Pull from ECR pull-through cache for faster builds
+# Pull from private ECR cache (cached during CodeBuild pre-build phase)
 ARG ECR_REGISTRY_URL
-FROM ${ECR_REGISTRY_URL}/docker-hub/library/debian:bookworm-slim AS builder
+FROM ${ECR_REGISTRY_URL}/knock-base:debian-bookworm-slim AS builder
 
 # Install build dependencies including static libraries
+# Combine into single RUN to reduce layers and leverage Lambda's chunk caching
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -18,7 +30,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     ca-certificates \
     file \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Set working directory for build
 WORKDIR /build
@@ -63,13 +76,15 @@ RUN set -o pipefail && \
     echo "=== BUILD SUCCESSFUL ===" && \
     ./build-output/knock 2>&1 | head -5 || true
 
-# Stage 2: Create Lambda runtime image using Debian to match build GLIBC
-# Using Debian Bookworm with Python 3.11 to match build environment
-# Pull from ECR pull-through cache for faster builds
+# Stage 2: Create Lambda runtime image using same cached Debian base
+# Using private ECR cached Debian to ensure binary compatibility with build stage
+# GLIBC compatibility is critical for the compiled knock and adept_activate binaries
+# Same base image as build stage for consistency and maximum caching efficiency
 ARG ECR_REGISTRY_URL
-FROM ${ECR_REGISTRY_URL}/docker-hub/library/debian:bookworm-slim
+FROM ${ECR_REGISTRY_URL}/knock-base:debian-bookworm-slim
 
-# Install Python and runtime dependencies
+# Install Python and essential runtime dependencies in single layer
+# Minimize unique bytes while maintaining binary compatibility
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3-pip \
@@ -77,7 +92,8 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     zlib1g \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Set up Lambda directories
 ENV LAMBDA_TASK_ROOT=/var/task
@@ -109,14 +125,16 @@ RUN echo "=== VERIFYING BINARY IN LAMBDA ENVIRONMENT ===" && \
     echo "Testing adept_activate binary:" && \
     ${LAMBDA_TASK_ROOT}/knock/adept_activate --version 2>&1 || echo "adept_activate test complete (exit code: $?)"
 
-# Copy the Lambda function code and requirements
-COPY infrastructure/lambda/handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
+# Install Python dependencies in a separate layer for better caching
+# This layer will likely be shared across many Lambda functions
 COPY infrastructure/lambda/requirements.txt ${LAMBDA_TASK_ROOT}/requirements.txt
-
-# Install Python dependencies including Lambda Runtime Interface Client
-RUN pip3 install --break-system-packages \
+RUN pip3 install --no-cache-dir \
     -r ${LAMBDA_TASK_ROOT}/requirements.txt \
     awslambdaric
+
+# Copy application-specific files in final layer
+# Keep unique application code in the smallest possible layer
+COPY infrastructure/lambda/handler.py ${LAMBDA_TASK_ROOT}/lambda_function.py
 
 # Set the entrypoint to use the Lambda Runtime Interface Client
 ENTRYPOINT ["/usr/bin/python3", "-m", "awslambdaric"]
