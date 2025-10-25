@@ -128,7 +128,7 @@ RUN echo "=== VERIFYING BINARY IN LAMBDA ENVIRONMENT ===" && \
 # Install Python dependencies in a separate layer for better caching
 # This layer will likely be shared across many Lambda functions
 COPY infrastructure/lambda/requirements.txt ${LAMBDA_TASK_ROOT}/requirements.txt
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --break-system-packages \
     -r ${LAMBDA_TASK_ROOT}/requirements.txt \
     awslambdaric
 
