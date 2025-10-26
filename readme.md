@@ -7,7 +7,7 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 ## 🚀 What It Does
 
 - **Input**: ACSM file (Adobe Content Server Message) via HTTP POST request
-- **Output**: DRM-free PDF or EPUB file stored in S3 with a pre-signed download URL
+- **Output**: DRM-free PDF or EPUB file stored in S3 with a pre-signed download URL (1 hour expiration)
 - **Runtime**: Serverless AWS Lambda with container image deployment
 - **Build**: Automated via AWS CodeBuild (no local Docker required)
 
@@ -18,7 +18,6 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 - [Documentation](#-documentation)
 - [Project Structure](#-project-structure)
 - [Development](#-development)
-- [Testing](#-testing)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -29,7 +28,7 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 - [uv](https://docs.astral.sh/uv/) - Python package manager
 - [Pulumi](https://www.pulumi.com/docs/get-started/install/) - Infrastructure as Code
 - [Pulumi ESC CLI](https://www.pulumi.com/docs/esc/cli/) - For environment management (`pulumi plugin install esc`)
-- AWS CLI configured with appropriate credentials
+- [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
 - [GitHub CLI](https://cli.github.com/) - For GitHub Actions setup (optional)
 - **Note**: Docker is NOT required locally - builds happen in AWS CodeBuild
 
@@ -80,12 +79,20 @@ uv sync
 # 3. Run setup to configure ESC and optionally GitHub Actions
 uv run setup
 
-# 4. Navigate to infrastructure and deploy
-cd infrastructure
+# 4. Deploy
 pulumi up
 ```
 
 After deployment, you'll receive a Lambda function URL for making conversion requests.
+
+### Testing
+
+```bash
+# Run interactive E2E tests
+uv run test
+```
+
+⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota.
 
 ### Use the API
 
@@ -226,16 +233,12 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 
 ### Build System
 
-- **[SIMPLIFIED_BUILD.md](SIMPLIFIED_BUILD.md)** - Overview of the simplified local dependency build system
 - **[build_container.py](build_container.py)** - Python script for building Knock binary locally
 - **[CMakeLists.txt](CMakeLists.txt)** - Top-level CMake build configuration
 
 ### Testing
 
 - **[tests/INTERACTIVE_CLI.md](tests/INTERACTIVE_CLI.md)** - Interactive test CLI with menu-driven ACSM file selection (`uv run itest`)
-- **[tests/QUICK_START.md](tests/QUICK_START.md)** - Run tests in under 1 minute
-- **[tests/TEST_GUIDE.md](tests/TEST_GUIDE.md)** - Complete pytest testing guide
-- **[tests/README.md](tests/README.md)** - Legacy shell-based test documentation
 
 ### Dependencies
 
@@ -246,44 +249,11 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 
 - **[docs/ACSM_DEVICE_LIMITS.md](docs/ACSM_DEVICE_LIMITS.md)** - Understanding and resolving device limit errors
 
-### Project Planning
-
-- **[instructions.md](instructions.md)** - Original project architecture and planning notes (archived)
-- **[WARP.md](WARP.md)** - AI assistant context and development guidelines
-
 ## 🛠 Development
-
-### Local Build
-
-Build the Knock binary locally for testing:
-
-```bash
-# Build using the container build script
-python3 build_container.py
-
-# Binary output location
-./build-output/knock
-```
-
-See [SIMPLIFIED_BUILD.md](SIMPLIFIED_BUILD.md) for build system details.
-
-### Docker Build
-
-Test the Lambda container locally:
-
-```bash
-# Build container image
-docker build -f infrastructure/lambda/Dockerfile -t knock-lambda .
-
-# Run container locally (basic test)
-docker run --rm knock-lambda
-```
 
 ### Infrastructure Updates
 
 ```bash
-cd infrastructure
-
 # Preview changes
 pulumi preview
 
@@ -293,45 +263,6 @@ pulumi up
 # View outputs
 pulumi stack output
 ```
-
-### Testing
-
-```bash
-# Install test dependencies
-uv pip install -e ".[dev]"
-
-# Run safe tests (no real ACSM processing)
-pytest tests/ -m "not real_acsm"
-
-# Run all tests
-pytest tests/
-```
-
-See [tests/QUICK_START.md](tests/QUICK_START.md) for testing guide.
-
-## 🧪 Testing
-
-This project includes comprehensive pytest-based tests:
-
-- **Basic Tests**: Health checks, connectivity, parameter validation
-- **ACSM Processing**: Actual file conversion (marked with `@pytest.mark.real_acsm`)
-- **Load Tests**: Concurrent requests, memory stress, performance
-- **Error Handling**: Invalid inputs, malformed JSON, HTTP methods
-
-**Quick Test:**
-
-```bash
-# Run all tests except real ACSM processing (recommended)
-pytest tests/ -m "not real_acsm"
-```
-
-⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota.
-
-See complete testing documentation:
-
-- [tests/QUICK_START.md](tests/QUICK_START.md) - Get started in 1 minute
-- [tests/TEST_GUIDE.md](tests/TEST_GUIDE.md) - Complete pytest guide
-- [tests/README.md](tests/README.md) - Shell script tests (legacy)
 
 ## 🤝 Contributing
 
