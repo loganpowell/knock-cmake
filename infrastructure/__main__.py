@@ -248,25 +248,23 @@ current_identity = aws.get_caller_identity()
 account_id = current_identity.account_id
 
 # GitHub OIDC Provider for GitHub Actions
+# Note: Thumbprints are optional - AWS automatically retrieves and validates them
+# from the provider's TLS certificate using trusted root CAs
 github_oidc_provider = aws.iam.OpenIdConnectProvider(
     "github-oidc-provider",
     url="https://token.actions.githubusercontent.com",
     client_id_lists=["sts.amazonaws.com"],
-    thumbprint_lists=[
-        # GitHub Actions OIDC thumbprint - actual current thumbprint
-        "7560D6F40FA55195F740EE2B1B7C0B4836CBE103"
-    ],
+    # thumbprint_lists parameter omitted - AWS will automatically retrieve it
 )
 
 # Pulumi Cloud OIDC Provider for Pulumi ESC
+# Note: Thumbprints are optional - AWS automatically retrieves and validates them
+# from the provider's TLS certificate using trusted root CAs
 pulumi_oidc_provider = aws.iam.OpenIdConnectProvider(
     "pulumi-oidc-provider",
     url="https://api.pulumi.com/oidc",
     client_id_lists=["pulumi"],
-    thumbprint_lists=[
-        # Pulumi Cloud OIDC thumbprint - actual current thumbprint
-        "1FD8EF1F201E9742EDD2FC2A15C167036938D1A9"
-    ],
+    # thumbprint_lists parameter omitted - AWS will automatically retrieve it
 )
 
 # IAM Role for GitHub Actions OIDC authentication
