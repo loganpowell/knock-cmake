@@ -611,6 +611,28 @@ function_url = aws.lambda_.FunctionUrl(
     opts=pulumi.ResourceOptions(depends_on=[lambda_wait_command]),
 )
 
+# AWS Lambda Security Update (Nov 2026): Add required permissions for function URL
+# Function URLs now require both lambda:InvokeFunctionUrl AND lambda:InvokeFunction
+# See: https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
+function_url_permission = aws.lambda_.Permission(
+    "knock-lambda-url-permission",
+    action="lambda:InvokeFunctionUrl",
+    function=lambda_function.name,
+    principal="*",  # Public access (matches authorization_type="NONE")
+    function_url_auth_type="NONE",
+    opts=pulumi.ResourceOptions(depends_on=[function_url]),
+)
+
+# Additional permission for lambda:InvokeFunction (required as of Nov 2026)
+function_invoke_permission = aws.lambda_.Permission(
+    "knock-lambda-invoke-permission",
+    action="lambda:InvokeFunction",
+    function=lambda_function.name,
+    principal="*",  # Public access (matches authorization_type="NONE")
+    source_account=aws.get_caller_identity().account_id,
+    opts=pulumi.ResourceOptions(depends_on=[function_url]),
+)
+
 # Create CloudWatch Log Group for Lambda
 log_group = aws.cloudwatch.LogGroup(
     "knock-lambda-logs",

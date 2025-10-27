@@ -35,39 +35,7 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 
 For first-time setup or when onboarding new developers, run the comprehensive setup script:
 
-> Note: Important infrastructure variable definitions are defined in [infrastructure/config.py](infrastructure/config.py)
-
-```bash
-# Clone and enter the repository
-git clone <repo-url>
-cd knock-lambda
-
-# Install dependencies
-uv sync
-
-# Run the comprehensive setup script
-uv run setup
-```
-
-This interactive setup script will:
-
-- **Configure Pulumi ESC** for centralized environment management
-- **Set up AWS credentials** in ESC environment for local development
-- **Configure Docker Hub credentials** in ESC environment
-- **Optionally configure GitHub Actions** with repository secrets for CI/CD
-- **Install Git hooks** for development workflow
-
-**Security Model**:
-
-- **Local Development**: Uses Pulumi ESC for convenient credential management
-- **CI/CD Pipeline**: Uses OIDC authentication for passwordless AWS access + ESC for Docker Hub credentials
-- **Pure ESC + OIDC**: No stored AWS credentials, secure token-based authentication
-
-**For Local Development**: After running setup, your ESC environment will be automatically configured. The infrastructure will load credentials from ESC.
-
-**For CI/CD**: GitHub Actions workflow uses OIDC roles for AWS authentication and ESC for Docker Hub credentials. Only `VARIABLE_EDITING_PAT` is stored as a GitHub secret.
-
-### Deploy to AWS the first time
+> Note: Important infrastructure variable definitions are defined in [infrastructure/vars.py](infrastructure/vars.py)
 
 The structure of the Pulumi deployment has three stacks:
 
@@ -97,7 +65,27 @@ uv sync
 uv run setup
 ```
 
-### After completing `uv run setup`, you'll see the following guidance:
+This interactive setup script will:
+
+- **Configure Pulumi ESC** for centralized environment management
+- **Set up AWS credentials** in ESC environment for local development
+- **Configure Docker Hub credentials** in ESC environment
+- **Optionally configure GitHub Actions** with repository secrets for CI/CD
+- **Install Git hooks** for development workflow
+
+**Security Model**:
+
+- **Local Development**: Uses Pulumi ESC for convenient credential management
+- **CI/CD Pipeline**: Uses OIDC authentication for passwordless AWS access + ESC for Docker Hub credentials
+- **Pure ESC + OIDC**: No stored AWS credentials, secure token-based authentication
+
+**For Local Development**: After running setup, your ESC environment will be automatically configured. The infrastructure will load credentials from ESC.
+
+**For CI/CD**: GitHub Actions workflow uses OIDC roles for AWS authentication and ESC for Docker Hub credentials. Only `VARIABLE_EDITING_PAT` is stored as a GitHub secret.
+
+### Deploy to AWS the first time
+
+#### After completing `uv run setup`, you'll see the following guidance:
 
 ```bash
 🔧 ESC Integration Status:
@@ -203,6 +191,12 @@ Summary of what was configured:
 ```
 
 After deployment, you'll receive a Lambda function URL for making conversion requests.
+
+---
+
+You will need to add a single Github Action Secret for `PULUMI_ACCESS_TOKEN` to enable CI/CD deployments.
+
+---
 
 ### Testing
 
@@ -383,16 +377,12 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 - **[build_container.py](build_container.py)** - Python script for building Knock binary locally
 - **[CMakeLists.txt](CMakeLists.txt)** - Top-level CMake build configuration
 
-### Testing
-
-- **[tests/INTERACTIVE_CLI.md](tests/INTERACTIVE_CLI.md)** - Interactive test CLI with menu-driven ACSM file selection (`uv run itest`)
-
 ### Dependencies
 
 - **[deps/libgourou/README.md](deps/libgourou/README.md)** - Adobe ADEPT DRM processing library
 - **[deps/uPDFParser/README.md](deps/uPDFParser/README.md)** - PDF parsing library
 
-### Troubleshooting
+### Troubleshooting ACSM Errors
 
 - **[docs/ACSM_DEVICE_LIMITS.md](docs/ACSM_DEVICE_LIMITS.md)** - Understanding and resolving device limit errors
 
@@ -434,7 +424,3 @@ This project is licensed under GPLv3. The Knock application and its dependencies
 - [Pulumi Documentation](https://www.pulumi.com/docs/)
 - [Knock Original Repository](https://github.com/BentonEdmondson/knock) (currently offline)
 - [Adobe ADEPT Protocol](https://www.adobe.com/solutions/ebook/digital-editions.html)
-
-```
-
-```
