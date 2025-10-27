@@ -10,60 +10,18 @@ This directory contains the Pulumi infrastructure code for deploying the Knock L
 
 **Note**: Docker is **not** required locally - the infrastructure uses AWS CodeBuild to build container images in the cloud.
 
-## File Structure
+**Configure Pulumi:**
 
+```bash
+# Login to Pulumi
+pulumi login
+
+# Set your AWS region
+pulumi config set aws:region us-east-2
+
+# Review the Pulumi configuration
+pulumi config
 ```
-infrastructure/
-├── __main__.py                        # Main Pulumi infrastructure definition
-├── config.py                          # Configuration constants and defaults
-├── buildspec.yml                      # AWS CodeBuild build specification
-├── codebuild-runner-with-digest.sh    # CodeBuild execution script with error reporting
-├── lambda-wait.sh                     # Wait for Lambda deployment to complete
-├── deploy.sh                          # One-command deployment wrapper
-├── platform-compat.sh                 # Cross-platform shell script utilities
-├── Pulumi.yaml                        # Pulumi project configuration
-├── Pulumi.dev.yaml                    # Development stack configuration
-├── CONFIG.md                          # Configuration options documentation
-├── PLATFORM_COMPAT.md                 # Platform compatibility documentation
-├── README.md                          # This file
-└── lambda/                            # Lambda function package
-    ├── __init__.py                    # Package initialization
-    ├── Dockerfile                     # Container definition for Lambda
-    ├── handler.py                     # Python Lambda handler implementation
-    ├── requirements.txt               # Python dependencies for Lambda
-    └── README.md                      # Lambda API documentation
-```
-
-## Setup
-
-1. **Install dependencies using uv:**
-
-   ```bash
-   # Run from the project root directory (where pyproject.toml is located)
-   uv sync
-   ```
-
-2. **Activate the virtual environment:**
-
-   ```bash
-   uv shell
-   ```
-
-3. **Navigate to infrastructure directory for deployment:**
-
-   ```bash
-   cd infrastructure
-   ```
-
-4. **Configure Pulumi:**
-
-   ```bash
-   # Set your AWS region
-   pulumi config set aws:region us-east-1
-
-   # Review the Pulumi configuration
-   pulumi config
-   ```
 
 ## Deployment
 
@@ -97,18 +55,6 @@ CodeBuild Role ─┘
 
 ## Development
 
-### Adding Dependencies
-
-Add new Python dependencies:
-
-```bash
-# Add to main dependencies
-uv add package-name
-
-# Add to dev dependencies
-uv add --dev package-name
-```
-
 ### Code Formatting
 
 Format code with the included dev tools:
@@ -126,7 +72,7 @@ uv run ruff check .
 Run tests:
 
 ```bash
-uv run pytest
+uv run test
 ```
 
 ## Architecture
@@ -242,39 +188,6 @@ Remove all resources:
 
 ```bash
 pulumi destroy
-```
-
-## Deployment Options
-
-### Option 1: Standard Pulumi Deployment
-
-```bash
-cd infrastructure
-pulumi up
-```
-
-### Option 2: One-Command Deployment (with testing)
-
-```bash
-cd infrastructure
-./deploy.sh
-```
-
-The `deploy.sh` script:
-
-- Checks prerequisites (Pulumi, AWS CLI, credentials)
-- Runs `pulumi up`
-- Retrieves function URL
-- Tests Lambda with a real ACSM file (if available)
-- Provides deployment summary
-
-### Option 3: Auto-approve Deployment
-
-```bash
-cd infrastructure
-./deploy.sh --yes
-# or
-pulumi up --yes
 ```
 
 ## Benefits of CodeBuild Approach

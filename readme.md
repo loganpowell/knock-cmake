@@ -7,7 +7,7 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 ## 🚀 What It Does
 
 - **Input**: ACSM file (Adobe Content Server Message) via HTTP POST request
-- **Output**: DRM-free PDF or EPUB file stored in S3 with a pre-signed download URL (1 hour expiration)
+- **Output**: DRM-free PDF or EPUB file stored in S3 with a pre-signed download URL (**1 hour expiration**)
 - **Runtime**: Serverless AWS Lambda with container image deployment
 - **Build**: Automated via AWS CodeBuild (no local Docker required)
 
@@ -17,7 +17,6 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 - [Architecture](#-architecture)
 - [Documentation](#-documentation)
 - [Project Structure](#-project-structure)
-- [Development](#-development)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -85,6 +84,10 @@ git clone git@github.com:loganpowell/knock-lambda.git
 
 cd knock-lambda
 
+# checkout the `dev` branch
+git fetch origin dev:dev
+git checkout dev
+
 # Install dependencies
 uv sync
 
@@ -92,41 +95,108 @@ uv sync
 uv run setup
 ```
 
-After running the `setup` script, you'll see the following instructions:
+### After completing `uv run setup`, you'll see the following guidance:
 
 ```bash
-TODO: get output of setup.py
-```
+🔧 ESC Integration Status:
+  • ESC Environment: default/knock-lambda-esc
+  • Stack Architecture:
+    - base:  Shared resources (OIDC, secrets, ECR cache)
+    - dev:   Development environment
+    - main:  Production environment
 
-3. checkout the `dev` branch
+🎯 Stack Creation & Deployment:
 
-```bash
-git fetch origin dev:dev
-git checkout dev
-```
+  # First, create all three stacks (one-time setup):
+---
+pulumi stack init base
+pulumi stack init dev
+pulumi stack init main
+---
 
-4. Comment out the [infrastructure/Pulumi.dev.yaml](/infrastructure/Pulumi.dev.yaml#L1) `environment` section temporarily so we can deploy the stack without ESC first.
+# Then deploy in order:
+# 1. Deploy base stack FIRST (uses local AWS credentials)
+---
+pulumi stack select base
+esc run default/knock-lambda-esc -- pulumi up
+---
 
-5. Deploy the `base` stack first
-
-```bash
+# 2. Deploy environment stacks (esc inferred from Pulumi.<stack>.yaml 'environment')
+---
+pulumi stack select dev
 pulumi up
-```
+---
 
-6. open [/infrastructure/esc-environment.yaml](/infrastructure/esc-environment.yaml#L11) and locate the `roleArn` under `values.aws.login.fn::open::aws-login.oidc`.
+---
+pulumi stack select main
+pulumi up
+---
 
-7. Get the `pulumi_oidc_provider_arn` ARN (protected from deletion)
+💡 Note: Base stack must be deployed before dev/main stacks
 
-```bash
-pulumi stack output pulumi_oidc_provider_arn
-```
+4️⃣ Git Hooks Setup
+✅ Installed post-checkout hook (auto-switches Pulumi stack on branch change)
+📋 Hook behavior:
+  • git checkout dev  → pulumi stack select dev
+  • git checkout main → pulumi stack select main
+💡 Base stack: manually select with 'pulumi stack select base'
 
-8. Update the `roleArn` with this ARN.
+============================================================
+🎉 Setup Complete!
+============================================================
 
-9. Configure ESC environment with these ARNs
+Summary of what was configured:
+✅ Pulumi ESC environment set up
+✅ Environment variables configured in ESC
+✅ Pulumi integration with ESC verified
+✅ Git hooks for development workflow
 
-```bash
-pulumi env set default/knock-lambda-esc --file infrastructure/esc-environment.yaml
+🔒 Security Benefits:
+• All configuration centralized in Pulumi ESC
+• No local credential files
+• Access controlled through Pulumi Cloud
+• Infrastructure automatically loads config from ESC
+• Easy to share configuration with team members
+
+�️  Multi-Stack Architecture:
+• base:  Shared resources (OIDC providers, secrets, ECR cache)
+• dev:   Development environment (references base stack)
+• main:  Production environment (references base stack)
+
+🚀 Next steps:
+
+🏗️  First-time setup: Create the three stacks
+  ---
+  pulumi stack init base
+  pulumi stack init dev
+  pulumi stack init main
+  ---
+
+📦 Step 1: Deploy base stack (shared infrastructure)
+  ---
+  pulumi stack select base
+  esc run default/knock-lambda-esc -- pulumi up --yes
+  ---
+
+🌍 Step 2: Deploy dev stack
+  ---
+  pulumi stack select dev
+  pulumi up
+  ---
+
+🌐 Step 3: Deploy main stack
+  ---
+  pulumi stack select main
+  pulumi up
+  ---
+💡 Pro Tips:
+• Base stack must be deployed FIRST (creates shared OIDC providers)
+• Dev/main stacks reference base stack outputs via StackReference
+• Update shared resources by updating base stack only
+• ESC environment is forker-friendly - no GitHub secrets needed!
+• Update configuration anytime with: esc env edit
+• Share configuration with team via Pulumi Cloud permissions
+
 ```
 
 After deployment, you'll receive a Lambda function URL for making conversion requests.
@@ -147,6 +217,7 @@ uv run test
 You can get the Lambda Function URL from Pulumi outputs:
 
 ```bash
+# from either dev or main stack
 pulumi stack output lambda_function_url
 ```
 
@@ -303,21 +374,6 @@ See [infrastructure/lambda/README.md](infrastructure/lambda/README.md) for compl
 
 - **[docs/ACSM_DEVICE_LIMITS.md](docs/ACSM_DEVICE_LIMITS.md)** - Understanding and resolving device limit errors
 
-## 🛠 Development
-
-### Infrastructure Updates
-
-```bash
-# Preview changes
-pulumi preview
-
-# Deploy changes
-pulumi up
-
-# View outputs
-pulumi stack output
-```
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please:
@@ -356,3 +412,7 @@ This project is licensed under GPLv3. The Knock application and its dependencies
 - [Pulumi Documentation](https://www.pulumi.com/docs/)
 - [Knock Original Repository](https://github.com/BentonEdmondson/knock) (currently offline)
 - [Adobe ADEPT Protocol](https://www.adobe.com/solutions/ebook/digital-editions.html)
+
+```
+
+```
