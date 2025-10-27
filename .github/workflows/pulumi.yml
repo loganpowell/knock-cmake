@@ -38,12 +38,20 @@ jobs:
       - name: Determine Stack Name
         id: stack
         run: |
-          # For releases, use the target branch
-          # For manual runs, use the current branch
+          # Determine branch name based on event type
           if [ "${{ github.event_name }}" = "release" ]; then
+            # For releases, use the target commitish (branch)
             BRANCH_NAME="${{ github.event.release.target_commitish }}"
           else
-            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            echo "::error::Unsupported event type: ${{ github.event_name }}"
+            exit 1
+          fi
+
+          # Ensure we're only deploying dev or main stacks
+          if [ "$BRANCH_NAME" != "dev" ] && [ "$BRANCH_NAME" != "main" ]; then
+            echo "::error::This workflow only deploys 'dev' or 'main' stacks. Got: $BRANCH_NAME"
+            echo "::error::Base stack should be deployed manually: pulumi stack select base && pulumi up"
+            exit 1
           fi
 
           STACK_NAME="$BRANCH_NAME"

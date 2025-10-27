@@ -228,6 +228,25 @@ curl -X POST <lambda_function_url> \
   -d '{"acsm_content": "<ACSM file content>"}'
 ```
 
+## Trigger Github Actions Deployment
+
+The github action configured for this project is set to trigger on releases and manual dispatches.
+
+```bash
+# for prereleases
+gh release create v0.0.1-dev \
+  --target dev \
+  --title "Dev Release v0.0.1" \
+  --notes "Testing new features" \
+  --prerelease
+
+# for production releases
+gh release create v0.0.1 \
+  --target main \
+  --title "Production Release v0.0.1" \
+  --notes "New features and bug fixes"
+```
+
 ⚠️ The response includes presigned S3 download URL for converted file (valid for 1 hour). **You must download the file before the URL expires.**
 
 ## 📁 Project Structure
