@@ -35,6 +35,8 @@ This project packages the [Knock](https://github.com/BentonEdmondson/knock) ACSM
 
 For first-time setup or when onboarding new developers, run the comprehensive setup script:
 
+> Note: Important infrastructure variable definitions are defined in [infrastructure/config.py](infrastructure/config.py)
+
 ```bash
 # Clone and enter the repository
 git clone <repo-url>
@@ -189,8 +191,9 @@ Summary of what was configured:
   pulumi stack select main
   pulumi up
   ---
+
 💡 Pro Tips:
-• Base stack must be deployed FIRST (creates shared OIDC providers)
+• Base stack must be deployed FIRST and only needs to be deployed once
 • Dev/main stacks reference base stack outputs via StackReference
 • Update shared resources by updating base stack only
 • ESC environment is forker-friendly - no GitHub secrets needed!

@@ -231,6 +231,24 @@ class PulumiESCManager:
                     "6. You can use placeholder 'your-token-here' and update later",
                 ],
             },
+            "VARIABLE_EDITING_PAT": {
+                "description": "GitHub Personal Access Token for GitHub Actions CI/CD (optional)",
+                "default": "",
+                "instructions": [
+                    "1. Only needed if you plan to use GitHub Actions for CI/CD",
+                    "2. Go to https://github.com/settings/personal-access-tokens",
+                    "3. Click 'Generate new token' → 'Fine-grained personal access token'",
+                    "4. Set expiration (recommend 1 year)",
+                    "5. Select this repository in 'Selected repositories'",
+                    "6. Under 'Repository permissions':",
+                    "   - Metadata: Read",
+                    "   - Actions: Read and Write",
+                    "   - Variables: Read and Write",
+                    "7. Click 'Generate token' and copy (starts with 'github_pat_')",
+                    "8. Store this in GitHub repository secrets as VARIABLE_EDITING_PAT",
+                    "9. This enables GitHub Actions to update repository variables for important pulumi outputs",
+                ],
+            },
         }
 
         print_step("1️⃣", "Pulumi ESC Environment Configuration")
@@ -330,30 +348,95 @@ class PulumiESCManager:
         return config_to_set
 
     def set_configuration(self, config_values: Dict[str, str]) -> bool:
-        """Set configuration values in the ESC environment."""
+        """Set configuration values in the ESC environment with proper pulumiConfig structure."""
         if not config_values:
             print_warning("No configuration to set")
             return True
 
         print_step("2️⃣", "Updating ESC Environment")
 
-        # Create basic environment configuration YAML
-        env_config = {"values": {"environmentVariables": config_values}}
-
-        # Write to temporary file
-        import tempfile
-        import yaml
+        # Separate sensitive and non-sensitive values
+        sensitive_keys = {"DOCKER_HUB_TOKEN", "VARIABLE_EDITING_PAT"}
 
         try:
+            import yaml
+            import tempfile
+
+            # Get current ESC environment definition (YAML only, no pretty output)
+            code, current_yaml = run_command(
+                ["esc", "env", "get", self.full_env_name, "--show-secrets=false"],
+                check=False,
+                capture=True,
+            )
+
+            if code == 0 and current_yaml.strip():
+                # The output might have "Definition" section, extract just the YAML
+                if "Definition" in current_yaml:
+                    # Split by "Definition" and take everything after it
+                    yaml_part = current_yaml.split("Definition", 1)[1].strip()
+                    # Remove any leading whitespace or separators
+                    yaml_part = yaml_part.lstrip("-").lstrip()
+                else:
+                    yaml_part = current_yaml.strip()
+
+                try:
+                    env_config = yaml.safe_load(yaml_part)
+                    if not env_config or not isinstance(env_config, dict):
+                        env_config = {}
+                except yaml.YAMLError:
+                    # If parsing fails, start fresh
+                    env_config = {}
+            else:
+                # Create new environment structure
+                env_config = {}
+
+            # Initialize the structure
+            if "values" not in env_config:
+                env_config["values"] = {}
+
+            # Store raw values at top level
+            for key, value in config_values.items():
+                if key in sensitive_keys:
+                    # Wrap secrets with fn::secret
+                    env_config["values"][key] = {"fn::secret": value}
+                    display_value = (
+                        "***" if value and value != "your-token-here" else value
+                    )
+                    print_success(f"Set {key}: {display_value} (as secret)")
+                else:
+                    # Store as plain value
+                    env_config["values"][key] = value
+                    print_success(f"Set {key}: {value}")
+
+            # Create pulumiConfig section to expose to Pulumi stacks
+            # Format: knock-lambda:KEY_NAME for project-scoped config
+            env_config["values"]["pulumiConfig"] = {
+                "aws:region": "${AWS_REGION}",
+                "knock-lambda:DOCKER_HUB_USERNAME": "${DOCKER_HUB_USERNAME}",
+                "knock-lambda:DOCKER_HUB_TOKEN": "${DOCKER_HUB_TOKEN}",
+                "knock-lambda:VARIABLE_EDITING_PAT": "${VARIABLE_EDITING_PAT}",
+            }
+
+            # Create environmentVariables section for GitHub Actions and esc run
+            env_config["values"]["environmentVariables"] = {
+                "AWS_REGION": "${AWS_REGION}",
+                "DOCKER_HUB_USERNAME": "${DOCKER_HUB_USERNAME}",
+                "DOCKER_HUB_TOKEN": "${DOCKER_HUB_TOKEN}",
+                "VARIABLE_EDITING_PAT": "${VARIABLE_EDITING_PAT}",
+            }
+
+            # Write to temporary file
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yaml", delete=False
             ) as f:
-                yaml.dump(env_config, f, default_flow_style=False)
+                yaml.dump(env_config, f, default_flow_style=False, sort_keys=False)
                 temp_file = f.name
 
-            # Apply configuration to ESC environment
+            # Apply to ESC environment
             code, output = run_command(
-                ["esc", "env", "edit", self.full_env_name, "-f", temp_file], check=False
+                ["esc", "env", "edit", self.full_env_name, "-f", temp_file],
+                check=False,
+                capture=True,
             )
 
             # Clean up temp file
@@ -363,17 +446,22 @@ class PulumiESCManager:
                 print_success(f"Updated ESC environment: {self.full_env_name}")
 
                 # Verify the update
-                updated_values = self.get_current_values()
-                print("\n✅ Updated environment variables:")
-                for key, value in updated_values.items():
-                    # Mask sensitive values
-                    if "TOKEN" in key or "SECRET" in key or "KEY" in key:
-                        display_value = (
-                            "***" if value and value != "your-token-here" else value
-                        )
-                    else:
-                        display_value = value
-                    print(f"  ✓ {key}: {display_value}")
+                print("\n📋 ESC Environment Structure:")
+                print("  values:")
+                for key in config_values.keys():
+                    is_secret = key in sensitive_keys
+                    secret_marker = " (fn::secret)" if is_secret else ""
+                    print(f"    {key}: <value>{secret_marker}")
+                print("  pulumiConfig:")
+                print("    aws:region: ${AWS_REGION}")
+                print("    knock-lambda:DOCKER_HUB_USERNAME: ${DOCKER_HUB_USERNAME}")
+                print("    knock-lambda:DOCKER_HUB_TOKEN: ${DOCKER_HUB_TOKEN}")
+                print("    knock-lambda:VARIABLE_EDITING_PAT: ${VARIABLE_EDITING_PAT}")
+                print("  environmentVariables:")
+                print("    AWS_REGION: ${AWS_REGION}")
+                print("    DOCKER_HUB_USERNAME: ${DOCKER_HUB_USERNAME}")
+                print("    DOCKER_HUB_TOKEN: ${DOCKER_HUB_TOKEN}")
+                print("    VARIABLE_EDITING_PAT: ${VARIABLE_EDITING_PAT}")
 
                 return True
             else:
@@ -382,6 +470,9 @@ class PulumiESCManager:
 
         except Exception as e:
             print_error(f"Error updating ESC environment: {e}")
+            import traceback
+
+            traceback.print_exc()
             return False
 
     def setup_pulumi_integration(self) -> bool:

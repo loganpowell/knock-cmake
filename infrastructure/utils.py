@@ -2,6 +2,64 @@ import os
 import shutil
 import yaml
 import pulumi
+import subprocess
+from typing import Tuple
+
+
+def get_github_repository() -> Tuple[str, str, str]:
+    """
+    Get GitHub repository information dynamically.
+
+    Tries multiple sources in this order:
+    1. GITHUB_REPOSITORY environment variable (set by GitHub Actions)
+    2. Git remote URL (when running locally)
+    3. Fallback to loganpowell/knock-lambda
+
+    Returns:
+        Tuple[str, str, str]: (GITHUB_REPOSITORY, GITHUB_ORG, GITHUB_REPO)
+        Example: ("loganpowell/knock-lambda", "loganpowell", "knock-lambda")
+    """
+    # Try environment variable first (GitHub Actions sets this)
+    github_repository = os.environ.get("GITHUB_REPOSITORY")
+
+    if not github_repository:
+        # Try to get from git remote when running locally
+        try:
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            git_url = result.stdout.strip()
+
+            # Extract org/repo from GitHub URL (supports both HTTPS and SSH)
+            if "github.com" in git_url:
+                if git_url.startswith("git@"):
+                    # SSH: git@github.com:loganpowell/knock-lambda.git
+                    repo_part = git_url.split(":")[-1].replace(".git", "")
+                else:
+                    # HTTPS: https://github.com/loganpowell/knock-lambda.git
+                    repo_part = git_url.split("github.com/")[-1].replace(".git", "")
+                github_repository = repo_part
+        except Exception:
+            # Fallback - will need to be set manually
+            github_repository = "loganpowell/knock-lambda"
+            pulumi.log.warn(
+                f"Could not determine GitHub repository, using fallback: {github_repository}"
+            )
+
+    # Parse organization and repository name
+    if github_repository and "/" in github_repository:
+        github_org, github_repo = github_repository.split("/", 1)
+    else:
+        github_org, github_repo = "loganpowell", "knock-lambda"
+        github_repository = f"{github_org}/{github_repo}"
+        pulumi.log.warn(
+            f"Could not parse GitHub repository, using fallback: {github_repository}"
+        )
+
+    return github_repository, github_org, github_repo
 
 
 def get_shell_command():

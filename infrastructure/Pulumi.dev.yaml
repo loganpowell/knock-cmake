@@ -1,2 +1,9 @@
 environment:
   - default/knock-lambda-esc
+values:
+  environmentVariables:
+    AWS_ACCESS_KEY_ID: ${aws.login.accessKeyId}
+    AWS_SECRET_ACCESS_KEY: ${aws.login.secretAccessKey}
+    STRIPE_API_KEY: ${stripe.apiKey}
+    STRIPE_API_URL: ${stripe.apiURL}
+    GREETING: ${greeting}

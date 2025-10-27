@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # Load ESC environment
+      # This exposes environmentVariables as step outputs (e.g., steps.esc.outputs.AWS_REGION)
+      # Pulumi stacks also auto-load pulumiConfig via the 'environment' key in Pulumi.{stack}.yaml
       - name: Configure ESC Environment
         id: esc
         uses: pulumi/esc-action@v1.5.0
@@ -83,7 +86,7 @@ jobs:
         with:
           role-to-assume: ${{ steps.oidc.outputs.role_arn }}
           role-session-name: GitHubActions-PulumiDeploy
-          aws-region: us-east-2
+          aws-region: ${{ steps.esc.outputs.AWS_REGION }}
 
       - name: Pulumi Up
         uses: pulumi/actions@v6.6.0

@@ -202,6 +202,65 @@ pulumi destroy
 
 ## Troubleshooting
 
+### `Resource is protected and cannot be deleted` Errors
+
+To delete resources with protection enabled (e.g., OIDC providers):
+
+Example error:
+
+```bash
+Error: 1 error occurred:
+   * Error deleting OpenID Connect Provider (urn:pulumi:dev::knock-lambda::aws:iam/openIdConnectProvider:OpenIdConnectProvider::github-oidc-provider): Resource is protected and cannot be deleted.
+```
+
+Example protected resource:
+
+```py
+github_oidc_provider = aws.iam.OpenIdConnectProvider(
+    "github-oidc-provider",
+    url="https://token.actions.githubusercontent.com",
+    client_id_lists=["sts.amazonaws.com"],
+    opts=pulumi.ResourceOptions(
+        protect=True,
+        delete_before_replace=False,
+    ),
+)
+```
+
+To unprotect and delete:
+
+```bash
+# To see the list of URNs in a stack, use
+pulumi stack --show-urns.
+# Syntax:
+pulumi state unprotect [resource URN...] [flags]
+# Unprotect a single resource
+pulumi state unprotect "urn:pulumi:dev::knock-lambda::aws:iam/openIdConnectProvider:OpenIdConnectProvider::github-oidc-provider"
+# Or unprotect all resources in the stack
+pulumi state unprotect --all
+# Then destroy the stack
+pulumi destroy
+```
+
+### `Manager can't find the specified <resource>` Errors
+
+Example error
+
+```bash
+aws:secretsmanager:SecretVersion docker-hub-credentials-version creating (0s)
+error: sdk-v2/provider2.go:572: sdk.helper_schema: putting Secrets Manager Secret
+(arn:aws:secretsmanager:us-east-2:xxxxxxxxxx:secret:knock-lambda-docker-hub-credentials-######)
+value: operation error Secrets Manager: PutSecretValue, https response error StatusCode: 400,
+RequestID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx, ResourceNotFoundException:
+Secrets Manager can't find the specified secret.: provider=aws@7.8.0
+```
+
+This is due to stale incomplete builds. Clean them up:
+
+```bash
+pulumi refresh --stack <dev/main/base> --yes
+```
+
 ### CodeBuild Failures
 
 If CodeBuild fails, the `codebuild-runner-with-digest.sh` script provides:

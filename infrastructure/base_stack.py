@@ -14,18 +14,19 @@ import os
 import json
 import pulumi
 import pulumi_aws as aws
+from infrastructure.utils import get_github_repository
 
-# Get repository information (same logic as main stack)
-GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "loganpowell/knock-lambda")
-GITHUB_ORG, GITHUB_REPO = GITHUB_REPOSITORY.split("/", 1)
+PROJECT_NAME = pulumi.get_project()
+
+# Get repository information dynamically
+GITHUB_REPOSITORY, GITHUB_ORG, GITHUB_REPO = get_github_repository()
 
 # Configuration
-PROJECT_NAME = "knock-lambda"
-AWS_REGION = "us-east-2"
 
 pulumi.log.info(f"🏗️  Base Stack - Shared Infrastructure")
 pulumi.log.info(f"🏢 GitHub Organization: {GITHUB_ORG}")
 pulumi.log.info(f"📦 Repository: {GITHUB_REPO}")
+pulumi.log.info(f"🔗 Full Repository: {GITHUB_REPOSITORY}")
 
 # Get current AWS account ID
 current_identity = aws.get_caller_identity()
