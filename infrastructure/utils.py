@@ -4,48 +4,6 @@ import yaml
 import pulumi
 
 
-def get_esc_docker_hub_key():
-    """
-    Get the values.aws.secrets.dockerHub.fn::open::aws-secrets.get.secretId from
-    infrastructure/esc-environment.yaml
-    Returns:
-        str: The Docker Hub credentials secret ID from Pulumi ESC environment
-    Raises:
-        FileNotFoundError: If the esc-environment.yaml file is not found
-        Exception: If the file cannot be parsed or the secret ID is not found
-    """
-    # grab the file using file system
-    esc_env_path = os.path.join(os.path.dirname(__file__), "esc-environment.yaml")
-    try:
-        with open(esc_env_path, "r") as f:
-            esc_env_content = f.read()
-
-        esc_env = yaml.safe_load(esc_env_content)
-
-        secret_id = (
-            esc_env.get("values", {})
-            .get("aws", {})
-            .get("secrets", {})
-            .get("dockerHub", {})
-            .get("fn::open::aws-secrets", {})
-            .get("get", {})
-            .get("secretId")
-        )
-
-        if not secret_id:
-            raise ValueError("Docker Hub secret ID not found in esc-environment.yaml")
-
-        return secret_id
-    except FileNotFoundError:
-        raise FileNotFoundError(f"ESC environment file not found at: {esc_env_path}")
-    except Exception as e:
-        raise Exception(f"Failed to load ESC environment: {e}")
-
-
-# test
-# print(get_esc_docker_hub_credentials())
-
-
 def get_shell_command():
     """
     Detect the appropriate shell for executing scripts in a cross-platform way.

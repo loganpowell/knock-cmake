@@ -14,15 +14,12 @@ This module provisions AWS infrastructure for the Knock ACSM conversion Lambda s
 import tempfile
 import os
 import json
-from pathlib import Path
 import pulumi
-from pulumi import Output
 import pulumi_aws as aws
 import pulumi_command as command
 from infrastructure.utils import (
     get_shell_command,
     get_validated_buildspec,
-    get_esc_docker_hub_key,
 )
 
 from infrastructure.config import (

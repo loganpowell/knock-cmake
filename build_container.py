@@ -62,13 +62,13 @@ def clean():
 def verify_sources():
     """Verify all required source directories exist"""
     print("Verifying source directories...")
-    
+
     required_dirs = {
         "libgourou": libgourou_DIR,
         "uPDFParser": updfparser_DIR,
         "knock": knock_DIR,
     }
-    
+
     for name, path in required_dirs.items():
         if not path.exists():
             print(f"ERROR: {name} source directory not found at {path}")
@@ -77,7 +77,7 @@ def verify_sources():
             print(f"  tar -xzf assets/sources/libgourou.tar.gz -C deps/")
             print(f"  tar -xzf assets/sources/uPDFParser.tar.gz -C deps/")
             sys.exit(1)
-        
+
         # Check for CMakeLists.txt
         cmake_file = path / "CMakeLists.txt"
         if not cmake_file.exists():
@@ -85,7 +85,7 @@ def verify_sources():
             print(f"\nCopy build configuration with:")
             print(f"  cp config/{name}/CMakeLists.txt {path}/")
             sys.exit(1)
-    
+
     print("✓ All source directories verified")
 
 
@@ -112,9 +112,9 @@ def main():
     print("✓ Clean completed")
 
     # Build configuration
-    build_type = os.environ.get('CMAKE_BUILD_TYPE', 'Release')
+    build_type = os.environ.get("CMAKE_BUILD_TYPE", "Release")
     print(f"\nBuild type: {build_type}")
-    
+
     cxx_flags = "-g -fno-omit-frame-pointer"
     if build_type == "Debug":
         cxx_flags += " -O0 -DDEBUG"
@@ -126,18 +126,20 @@ def main():
     print("\n" + "=" * 60)
     print("CONFIGURING BUILD")
     print("=" * 60)
-    
+
     cmake_cmd = [
         "cmake",
-        "-S", ".",
-        "-B", str(BUILD_DIR),
+        "-S",
+        ".",
+        "-B",
+        str(BUILD_DIR),
         f"-DCMAKE_BUILD_TYPE={build_type}",
         f"-DCMAKE_CXX_FLAGS={cxx_flags}",
         f"-DCMAKE_C_FLAGS={cxx_flags}",
         "-DBUILD_STATIC=OFF",  # Use dynamic linking for Lambda container
         "-DBUILD_SHARED=ON",
     ]
-    
+
     run_cmd(cmake_cmd, cwd=SOURCE_DIR)
     print("✓ CMake configure completed")
 
@@ -145,13 +147,8 @@ def main():
     print("\n" + "=" * 60)
     print("BUILDING")
     print("=" * 60)
-    
-    build_cmd = [
-        "cmake",
-        "--build", str(BUILD_DIR),
-        "--config", "Release",
-        "--verbose"
-    ]
+
+    build_cmd = ["cmake", "--build", str(BUILD_DIR), "--config", "Release", "--verbose"]
 
     # Add parallel jobs if cmake version supports it (3.12+)
     cmake_version_output = run(["cmake", "--version"], capture_output=True, text=True)
@@ -171,36 +168,36 @@ def main():
     print("\n" + "=" * 60)
     print(f"INSTALLING TO: {INSTALL_DIR}")
     print("=" * 60)
-    
+
     run_cmd(["cmake", "--install", str(BUILD_DIR), "--verbose"], cwd=SOURCE_DIR)
     print("✓ Install completed")
 
     # Verify binary
     binary_path = INSTALL_DIR / "knock"
     print(f"\nVerifying binary at: {binary_path}")
-    
+
     if not binary_path.exists():
         print("\n" + "=" * 60)
         print(f"ERROR: Binary not found at {binary_path}")
         print("=" * 60)
-        
+
         if INSTALL_DIR.exists():
             print(f"\nContents of {INSTALL_DIR}:")
             for item in INSTALL_DIR.iterdir():
                 print(f"  {item}")
-        
+
         sys.exit(1)
 
     # Check binary properties
     print("\nBinary information:")
     run(["ls", "-lh", str(binary_path)])
     run(["file", str(binary_path)])
-    
+
     print("\n" + "=" * 60)
     print("✅ BUILD SUCCESSFUL")
     print("=" * 60)
     print(f"\nKnock binary: {binary_path}")
-    
+
     return True
 
 

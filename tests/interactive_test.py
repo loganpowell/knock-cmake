@@ -345,7 +345,9 @@ def test_presigned_url_debug(function_url: str) -> bool:
                     print("\n✅ Presigned URL test PASSED!\n")
                     return True
                 else:
-                    print(f"❌ Download failed with HTTP {download_response.status_code}")
+                    print(
+                        f"❌ Download failed with HTTP {download_response.status_code}"
+                    )
                     print(f"Error: {download_response.reason}")
                     print(f"\n📄 Error details:")
                     print(download_response.text[:1000])  # First 1000 chars of error

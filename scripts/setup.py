@@ -23,11 +23,10 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
-import yaml
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 import shutil
+from infrastructure.utils import get_shell_command
 
 
 class Colors:
@@ -92,47 +91,6 @@ def check_command_exists(command: str) -> bool:
     return shutil.which(command) is not None
 
 
-def get_shell_command() -> str:
-    """
-    Detect the appropriate shell for executing scripts in a cross-platform way.
-
-    Returns:
-        str: The shell command to use ('bash', 'sh', or 'C:\\Program Files\\Git\\bin\\bash.exe')
-
-    Priority:
-    1. bash (most common on Unix/Linux/macOS and Git Bash on Windows)
-    2. sh (POSIX shell, widely available)
-    3. Git Bash on Windows (C:\\Program Files\\Git\\bin\\bash.exe)
-
-    Raises:
-        RuntimeError: If no compatible shell is found
-    """
-    # Try to find bash first (preferred)
-    bash_path = shutil.which("bash")
-    if bash_path:
-        return bash_path
-
-    # Fall back to sh (POSIX shell)
-    sh_path = shutil.which("sh")
-    if sh_path:
-        return sh_path
-
-    # On Windows, try common Git Bash locations
-    if os.name == "nt":
-        git_bash_paths = [
-            r"C:\Program Files\Git\bin\bash.exe",
-            r"C:\Program Files (x86)\Git\bin\bash.exe",
-            os.path.expanduser(r"~\AppData\Local\Programs\Git\bin\bash.exe"),
-        ]
-        for path in git_bash_paths:
-            if os.path.exists(path):
-                return f'"{path}"'  # Quote path for spaces
-
-    raise RuntimeError(
-        "No compatible shell found. Please install bash, sh, or Git for Windows."
-    )
-
-
 def source_platform_compat() -> None:
     """Source the platform compatibility script to set up cross-platform environment."""
     repo_root = Path(__file__).parent.parent
@@ -171,9 +129,7 @@ class PulumiESCManager:
     """Manage Pulumi ESC environment as the primary configuration source."""
 
     def __init__(
-        self, 
-        organization: str = "default", 
-        environment_name: str = "knock-lambda-esc"
+        self, organization: str = "default", environment_name: str = "knock-lambda-esc"
     ):
         self.organization = organization
         self.environment_name = environment_name
@@ -372,6 +328,7 @@ class PulumiESCManager:
                 config_to_set[config_name] = value
 
         return config_to_set
+
     def set_configuration(self, config_values: Dict[str, str]) -> bool:
         """Set configuration values in the ESC environment."""
         if not config_values:
@@ -441,8 +398,10 @@ class PulumiESCManager:
 
         for config_file in stack_configs:
             config_path = Path(config_file)
-            stack_name = config_file.split(".")[-2]  # Extract stack name (base, dev, main)
-            
+            stack_name = config_file.split(".")[
+                -2
+            ]  # Extract stack name (base, dev, main)
+
             if config_path.exists():
                 try:
                     import yaml
@@ -453,7 +412,9 @@ class PulumiESCManager:
                     # Base stack doesn't use ESC (chicken-and-egg problem)
                     if stack_name == "base":
                         print_warning(f"{config_file} - Base stack doesn't use ESC")
-                        print("  • Base stack creates the OIDC providers needed for ESC")
+                        print(
+                            "  • Base stack creates the OIDC providers needed for ESC"
+                        )
                         print("  • Deploy base stack first using local AWS credentials")
                         continue
 
@@ -498,7 +459,9 @@ class PulumiESCManager:
         print(f"  esc run {self.full_env_name} -- pulumi up")
         print("  ```")
         print()
-        print(f"  # 2. Deploy environment stacks (esc inferred from Pulumi.<stack>.yaml 'environment')")
+        print(
+            f"  # 2. Deploy environment stacks (esc inferred from Pulumi.<stack>.yaml 'environment')"
+        )
         print("  ```")
         print("  pulumi stack select dev")
         print(f"  pulumi up")
@@ -545,7 +508,9 @@ class GitHooksSetup:
                 print("  📋 Hook behavior:")
                 print("    • git checkout dev  → pulumi stack select dev")
                 print("    • git checkout main → pulumi stack select main")
-                print("  💡 Base stack: manually select with 'pulumi stack select base'")
+                print(
+                    "  💡 Base stack: manually select with 'pulumi stack select base'"
+                )
             except Exception as e:
                 print_error(f"Failed to install post-checkout hook: {e}")
         else:
@@ -633,7 +598,7 @@ def main():
     print("    pulumi stack init main")
     print("    ```")
     print()
-    print("  📦 Step 1: Deploy base stack (shared infrastructure)")
+    print("  📦 Step 1: Deploy base stack (one-time setup)")
     print("    ```")
     print("    pulumi stack select base")
     print(f"    esc run {esc_manager.full_env_name} -- pulumi up --yes")
