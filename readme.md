@@ -66,44 +66,98 @@ This interactive setup script will:
 
 **For CI/CD**: GitHub Actions workflow uses OIDC roles for AWS authentication and ESC for Docker Hub credentials. Only `VARIABLE_EDITING_PAT` is stored as a GitHub secret.
 
-### Deploy to AWS
+### Deploy to AWS the first time
+
+The structure of the Pulumi deployment has three stacks:
+
+1. `base` - for shared resources across environments
+2. `main` - for production deployments
+3. `dev` - for development/testing deployments
+
+`base` resources are shared between both `main` and `dev` stacks.
+`main` and `dev` are meant to correspond to branches in your GitHub repository (e.g., `main` branch uses `main` stack).
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
+# Clone the repository using HTTPS
+git clone https://github.com/loganpowell/knock-lambda.git
+# or ssh
+git clone git@github.com:loganpowell/knock-lambda.git
+
 cd knock-lambda
 
-# 2. Install dependencies
+# Install dependencies
 uv sync
 
-# 3. Run setup to configure ESC and optionally GitHub Actions
+# Run setup to configure ESC and optionally GitHub Actions
 uv run setup
+```
 
-# 4. Deploy
+After running the `setup` script, you'll see the following instructions:
+
+```bash
+TODO: get output of setup.py
+```
+
+3. checkout the `dev` branch
+
+```bash
+git fetch origin dev:dev
+git checkout dev
+```
+
+4. Comment out the [infrastructure/Pulumi.dev.yaml](/infrastructure/Pulumi.dev.yaml#L1) `environment` section temporarily so we can deploy the stack without ESC first.
+
+5. Deploy the `base` stack first
+
+```bash
 pulumi up
+```
+
+6. open [/infrastructure/esc-environment.yaml](/infrastructure/esc-environment.yaml#L11) and locate the `roleArn` under `values.aws.login.fn::open::aws-login.oidc`.
+
+7. Get the `pulumi_oidc_provider_arn` ARN (protected from deletion)
+
+```bash
+pulumi stack output pulumi_oidc_provider_arn
+```
+
+8. Update the `roleArn` with this ARN.
+
+9. Configure ESC environment with these ARNs
+
+```bash
+pulumi env set default/knock-lambda-esc --file infrastructure/esc-environment.yaml
 ```
 
 After deployment, you'll receive a Lambda function URL for making conversion requests.
 
 ### Testing
 
+#### Local Testing
+
 ```bash
 # Run interactive E2E tests
 uv run test
 ```
 
-⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota.
+⚠️ **ACSM files have limited downloads per device.** Most tests use dummy data to preserve your download quota, but when you convert a real ACSM file, keep it because you may not be able to re-download it if you exceed your device limit.
 
-### Use the API
+#### Use the API
+
+You can get the Lambda Function URL from Pulumi outputs:
+
+```bash
+pulumi stack output lambda_function_url
+```
 
 ```bash
 # Convert an ACSM file
-curl -X POST https://random-lambda-uid.lambda-url.us-east-1.on.aws/ \
+curl -X POST <lambda_function_url> \
   -H "Content-Type: application/json" \
   -d '{"acsm_content": "<ACSM file content>"}'
-
-# Response includes presigned S3 download URL for converted file (valid for 1 hour)
 ```
+
+⚠️ The response includes presigned S3 download URL for converted file (valid for 1 hour). **You must download the file before the URL expires.**
 
 ## 📁 Project Structure
 

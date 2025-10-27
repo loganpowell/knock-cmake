@@ -2,7 +2,7 @@
 """
 Comprehensive setup script for knock-lambda development environment.
 
-This script sets up Pulumi ESC (Environment, Secrets, and Configuration) as the primary 
+This script sets up Pulumi ESC (Environment, Secrets, and Configuration) as the primary
 source of truth for:
 1. Pulumi ESC environment for centralized configuration
 2. Local development environment variables
@@ -170,7 +170,11 @@ def source_platform_compat() -> None:
 class PulumiESCManager:
     """Manage Pulumi ESC environment as the primary configuration source."""
 
-    def __init__(self, organization: str = "default", environment_name: str = "knock-lambda-esc"):
+    def __init__(
+        self, 
+        organization: str = "default", 
+        environment_name: str = "knock-lambda-esc"
+    ):
         self.organization = organization
         self.environment_name = environment_name
         self.full_env_name = f"{organization}/{environment_name}"
@@ -185,7 +189,7 @@ class PulumiESCManager:
             print("Or run: curl -fsSL https://get.pulumi.com/esc/install.sh | sh")
             return False
 
-        # Check for Pulumi CLI 
+        # Check for Pulumi CLI
         if not check_command_exists("pulumi"):
             print_error("Pulumi CLI is required for this setup")
             print("Install from: https://www.pulumi.com/docs/install/")
@@ -202,7 +206,9 @@ class PulumiESCManager:
 
     def check_existing_environment(self) -> bool:
         """Check if the ESC environment already exists."""
-        code, _ = run_command(["esc", "env", "get", self.full_env_name], check=False, capture=True)
+        code, _ = run_command(
+            ["esc", "env", "get", self.full_env_name], check=False, capture=True
+        )
         return code == 0
 
     def create_environment(self) -> bool:
@@ -220,10 +226,11 @@ class PulumiESCManager:
         if not self.check_existing_environment():
             return {}
 
-        code, output = run_command(["esc", "env", "open", self.full_env_name], check=False, capture=True)
+        code, output = run_command(
+            ["esc", "env", "open", self.full_env_name], check=False, capture=True
+        )
         if code == 0:
             try:
-                import json
                 env_data = json.loads(output)
                 env_vars = env_data.get("environmentVariables", {})
                 return env_vars
@@ -270,32 +277,13 @@ class PulumiESCManager:
             },
         }
 
-        optional_config = {
-            "VARIABLE_EDITING_PAT": {
-                "description": "GitHub Personal Access Token for GitHub Actions CI/CD (optional)",
-                "default": "",
-                "instructions": [
-                    "1. Only needed if you plan to use GitHub Actions for CI/CD",
-                    "2. Go to https://github.com/settings/personal-access-tokens",
-                    "3. Click 'Generate new token' → 'Fine-grained personal access token'",
-                    "4. Set expiration (recommend 1 year)",
-                    "5. Select this repository in 'Selected repositories'",
-                    "6. Under 'Repository permissions':",
-                    "   - Metadata: Read",
-                    "   - Actions: Read and Write", 
-                    "   - Variables: Read and Write",
-                    "7. Click 'Generate token' and copy (starts with 'github_pat_')",
-                    "8. Store this in GitHub repository secrets as VARIABLE_EDITING_PAT",
-                    "9. This enables GitHub Actions to update repository variables for important pulumi outputs",
-                ],
-            },
-        }
-
         print_step("1️⃣", "Pulumi ESC Environment Configuration")
-        
+
         # Check if environment exists
         if not self.check_existing_environment():
-            print(f"\n📋 ESC environment '{self.full_env_name}' does not exist. Creating...")
+            print(
+                f"\n📋 ESC environment '{self.full_env_name}' does not exist. Creating..."
+            )
             if not self.create_environment():
                 return {}
         else:
@@ -303,13 +291,15 @@ class PulumiESCManager:
 
         # Load current values
         current_values = self.get_current_values()
-        
+
         if current_values:
             print("\n✅ Current environment variables:")
             for key, value in current_values.items():
                 # Mask sensitive values
                 if "TOKEN" in key or "SECRET" in key or "KEY" in key:
-                    display_value = "***" if value and value != "your-token-here" else value
+                    display_value = (
+                        "***" if value and value != "your-token-here" else value
+                    )
                 else:
                     display_value = value
                 print(f"  ✓ {key}: {display_value}")
@@ -321,7 +311,7 @@ class PulumiESCManager:
         for config_name, config_info in required_config.items():
             current_value = current_values.get(config_name, "")
             default_value = config_info["default"]
-            
+
             # Consider it missing if not set or still using placeholder
             if not current_value or current_value == default_value:
                 missing_config.append(config_name)
@@ -329,26 +319,20 @@ class PulumiESCManager:
         if not missing_config:
             print_success("All required configuration is set up!")
         else:
-            print(f"\n📝 Required configuration to update ({len(missing_config)} items):")
+            print(
+                f"\n📝 Required configuration to update ({len(missing_config)} items):"
+            )
             for config in missing_config:
                 current_val = current_values.get(config, "not set")
                 print(f"  ❌ {config}: {current_val}")
 
-        # Check for optional GitHub Actions configuration
-        github_actions_configured = current_values.get("VARIABLE_EDITING_PAT", "")
-        print(f"\n� Optional GitHub Actions configuration:")
-        if github_actions_configured:
-            print(f"  ✓ VARIABLE_EDITING_PAT: *** (GitHub Actions CI/CD ready)")
-        else:
-            print(f"  ⚪ VARIABLE_EDITING_PAT: not configured (GitHub Actions CI/CD won't work)")
-
         # Return early if nothing to configure
-        if not missing_config and github_actions_configured:
+        if not missing_config:
             return {}
 
         # Prompt for missing configuration
         config_to_set = {}
-        
+
         if missing_config:
             print(f"\n🔧 Please provide required configuration values:")
             print("(You can leave values as placeholders and update them later)")
@@ -371,10 +355,12 @@ class PulumiESCManager:
                 if current_value:
                     prompt = f"\nCurrent value: {current_value}\nEnter new {config_name} (press Enter to keep current): "
                 else:
-                    prompt = f'\nEnter {config_name} (press Enter for "{default_value}"): '
-                
+                    prompt = (
+                        f'\nEnter {config_name} (press Enter for "{default_value}"): '
+                    )
+
                 value = input(prompt).strip()
-                
+
                 if not value:
                     if current_value:
                         # Keep current value
@@ -382,77 +368,10 @@ class PulumiESCManager:
                     else:
                         # Use default
                         value = default_value
-                
+
                 config_to_set[config_name] = value
 
-        # Ask about optional GitHub Actions configuration
-        if not github_actions_configured:
-            print(f"\n❓ Would you like to configure GitHub Actions CI/CD support? (y/N): ", end="")
-            setup_github_actions = input().strip().lower() in ['y', 'yes']
-            
-            if setup_github_actions:
-                print(f"\n🔧 GitHub Actions configuration:")
-                for config_name, config_info in optional_config.items():
-                    description = config_info["description"]
-                    instructions = config_info["instructions"]
-
-                    print(f"\n{'='*60}")
-                    print(f"🔧 {config_name} (Optional)")
-                    print(f"📝 {description}")
-                    print("\n📋 Setup instructions:")
-                    for i, instruction in enumerate(instructions, 1):
-                        print(f"   {instruction}")
-                    print("=" * 60)
-
-                    value = input(f'\nEnter {config_name} (press Enter to skip): ').strip()
-                    
-                    if value:
-                        config_to_set[config_name] = value
-                        print_success("GitHub Actions CI/CD will be enabled!")
-                    else:
-                        print_warning("Skipping GitHub Actions setup - you can configure this later")
-
         return config_to_set
-
-        # Prompt for missing configuration
-        config_to_set = {}
-        print(f"\n� Please provide configuration values:")
-        print("(You can leave values as placeholders and update them later)")
-
-        for config_name in missing_config:
-            config_info = required_config[config_name]
-            description = config_info["description"]
-            default_value = config_info["default"]
-            instructions = config_info["instructions"]
-
-            print(f"\n{'='*60}")
-            print(f"� {config_name}")
-            print(f"📝 {description}")
-            print("\n📋 Setup instructions:")
-            for i, instruction in enumerate(instructions, 1):
-                print(f"   {instruction}")
-            print("=" * 60)
-
-            current_value = current_values.get(config_name, "")
-            if current_value:
-                prompt = f"\nCurrent value: {current_value}\nEnter new {config_name} (press Enter to keep current): "
-            else:
-                prompt = f'\nEnter {config_name} (press Enter for "{default_value}"): '
-            
-            value = input(prompt).strip()
-            
-            if not value:
-                if current_value:
-                    # Keep current value
-                    continue
-                else:
-                    # Use default
-                    value = default_value
-            
-            config_to_set[config_name] = value
-
-        return config_to_set
-
     def set_configuration(self, config_values: Dict[str, str]) -> bool:
         """Set configuration values in the ESC environment."""
         if not config_values:
@@ -462,46 +381,48 @@ class PulumiESCManager:
         print_step("2️⃣", "Updating ESC Environment")
 
         # Create basic environment configuration YAML
-        env_config = {
-            "values": {
-                "environmentVariables": config_values
-            }
-        }
+        env_config = {"values": {"environmentVariables": config_values}}
 
         # Write to temporary file
         import tempfile
         import yaml
-        
+
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".yaml", delete=False
+            ) as f:
                 yaml.dump(env_config, f, default_flow_style=False)
                 temp_file = f.name
 
             # Apply configuration to ESC environment
-            code, output = run_command(["esc", "env", "edit", self.full_env_name, "-f", temp_file], check=False)
-            
+            code, output = run_command(
+                ["esc", "env", "edit", self.full_env_name, "-f", temp_file], check=False
+            )
+
             # Clean up temp file
             os.unlink(temp_file)
-            
+
             if code == 0:
                 print_success(f"Updated ESC environment: {self.full_env_name}")
-                
+
                 # Verify the update
                 updated_values = self.get_current_values()
                 print("\n✅ Updated environment variables:")
                 for key, value in updated_values.items():
                     # Mask sensitive values
                     if "TOKEN" in key or "SECRET" in key or "KEY" in key:
-                        display_value = "***" if value and value != "your-token-here" else value
+                        display_value = (
+                            "***" if value and value != "your-token-here" else value
+                        )
                     else:
                         display_value = value
                     print(f"  ✓ {key}: {display_value}")
-                
+
                 return True
             else:
                 print_error(f"Failed to update ESC environment: {output}")
                 return False
-                
+
         except Exception as e:
             print_error(f"Error updating ESC environment: {e}")
             return False
@@ -511,25 +432,44 @@ class PulumiESCManager:
         print_step("3️⃣", "Pulumi ESC Integration")
 
         # Check Pulumi stack configuration
-        stack_configs = ["infrastructure/Pulumi.dev.yaml", "infrastructure/Pulumi.main.yaml"]
-        
+        # Note: Base stack doesn't use ESC (needs credentials to create OIDC providers first)
+        stack_configs = [
+            "infrastructure/Pulumi.base.yaml",
+            "infrastructure/Pulumi.dev.yaml",
+            "infrastructure/Pulumi.main.yaml",
+        ]
+
         for config_file in stack_configs:
             config_path = Path(config_file)
+            stack_name = config_file.split(".")[-2]  # Extract stack name (base, dev, main)
+            
             if config_path.exists():
                 try:
                     import yaml
-                    with open(config_path, 'r') as f:
+
+                    with open(config_path, "r") as f:
                         config_data = yaml.safe_load(f) or {}
-                    
+
+                    # Base stack doesn't use ESC (chicken-and-egg problem)
+                    if stack_name == "base":
+                        print_warning(f"{config_file} - Base stack doesn't use ESC")
+                        print("  • Base stack creates the OIDC providers needed for ESC")
+                        print("  • Deploy base stack first using local AWS credentials")
+                        continue
+
                     # Check if ESC environment is configured
-                    environment = config_data.get('environment', [])
+                    environment = config_data.get("environment", [])
                     if self.full_env_name in environment:
                         print_success(f"{config_file} already configured for ESC")
                     else:
-                        print_warning(f"{config_file} not configured for ESC environment")
-                        print(f"  Expected: environment contains '{self.full_env_name}'")
+                        print_warning(
+                            f"{config_file} not configured for ESC environment"
+                        )
+                        print(
+                            f"  Expected: environment contains '{self.full_env_name}'"
+                        )
                         print(f"  Current: {environment}")
-                        
+
                 except Exception as e:
                     print_warning(f"Could not read {config_file}: {e}")
             else:
@@ -537,17 +477,41 @@ class PulumiESCManager:
 
         print("\n🔧 ESC Integration Status:")
         print(f"  • ESC Environment: {self.full_env_name}")
-        print("  • Local Development: Use 'esc run' or configure AWS credentials")
-        print("  • CI/CD: Configure GitHub Actions with ESC or AWS credentials")
+        print("  • Stack Architecture:")
+        print("    - base:  Shared resources (OIDC, secrets, ECR cache)")
+        print("    - dev:   Development environment")
+        print("    - main:  Production environment")
         print()
-        print("🎯 Usage:")
-        print("  # Run Pulumi with ESC environment")
+        print("🎯 Stack Creation & Deployment:")
+        print()
+        print("  # First, create all three stacks (one-time setup):")
+        print("  ```")
+        print("  pulumi stack init base")
+        print("  pulumi stack init dev")
+        print("  pulumi stack init main")
+        print("  ```")
+        print()
+        print("  # Then deploy in order:")
+        print("  # 1. Deploy base stack FIRST (uses local AWS credentials)")
+        print("  ```")
+        print("  pulumi stack select base")
         print(f"  esc run {self.full_env_name} -- pulumi up")
+        print("  ```")
         print()
-        print("  # Or set up local AWS credentials and run directly")
-        print("  pulumi up")
+        print(f"  # 2. Deploy environment stacks (esc inferred from Pulumi.<stack>.yaml 'environment')")
+        print("  ```")
+        print("  pulumi stack select dev")
+        print(f"  pulumi up")
+        print("  ```")
         print()
-        
+        print("  ```")
+        print("  pulumi stack select main")
+        print(f"  pulumi up")
+        print("  ```")
+        print()
+        print("💡 Note: Base stack must be deployed before dev/main stacks")
+        print()
+
         return True
 
 
@@ -581,6 +545,7 @@ class GitHooksSetup:
                 print("  📋 Hook behavior:")
                 print("    • git checkout dev  → pulumi stack select dev")
                 print("    • git checkout main → pulumi stack select main")
+                print("  💡 Base stack: manually select with 'pulumi stack select base'")
             except Exception as e:
                 print_error(f"Failed to install post-checkout hook: {e}")
         else:
@@ -653,31 +618,45 @@ def main():
     print("  • Easy to share configuration with team members")
     print()
 
-    print("🌍 Configuration Features:")
-    print("  • Centralized environment variable management")
-    print("  • Easy region changes via ESC environment")
-    print("  • Placeholder values for Docker Hub credentials")
-    print("  • Infrastructure automatically uses ESC configuration")
+    print("�️  Multi-Stack Architecture:")
+    print("  • base:  Shared resources (OIDC providers, secrets, ECR cache)")
+    print("  • dev:   Development environment (references base stack)")
+    print("  • main:  Production environment (references base stack)")
     print()
 
     print("🚀 Next steps:")
-    print("  • Update Docker Hub credentials in ESC when ready:")
-    print(f"    esc env edit {esc_manager.full_env_name}")
-    print("  • Deploy infrastructure:")
-    print(f"    esc run {esc_manager.full_env_name} -- pulumi up")
-    print("  • Or set up local AWS credentials and run: pulumi up")
     print()
-    print("🔧 For GitHub Actions CI/CD:")
-    print("  • Run setup again and choose 'y' for GitHub Actions configuration")
-    print("  • Or manually add VARIABLE_EDITING_PAT to GitHub repository secrets")
-    print("  • This enables automated deployments on push to main/dev branches")
+    print("  🏗️  First-time setup: Create the three stacks")
+    print("    ```")
+    print("    pulumi stack init base")
+    print("    pulumi stack init dev")
+    print("    pulumi stack init main")
+    print("    ```")
     print()
+    print("  📦 Step 1: Deploy base stack (shared infrastructure)")
+    print("    ```")
+    print("    pulumi stack select base")
+    print(f"    esc run {esc_manager.full_env_name} -- pulumi up --yes")
+    print("    ```")
+    print()
+    print("  🌍 Step 2: Deploy dev stack")
+    print("    ```")
+    print("    pulumi stack select dev")
+    print(f"    pulumi up")
+    print("    ```")
+    print()
+    print("  🌐 Step 3: Deploy main stack")
+    print("    ```")
+    print("    pulumi stack select main")
+    print(f"    pulumi up")
+    print("    ```")
     print("💡 Pro Tips:")
+    print("  • Base stack must be deployed FIRST (creates shared OIDC providers)")
+    print("  • Dev/main stacks reference base stack outputs via StackReference")
+    print("  • Update shared resources by updating base stack only")
     print("  • ESC environment is forker-friendly - no GitHub secrets needed!")
     print("  • Update configuration anytime with: esc env edit")
     print("  • Share configuration with team via Pulumi Cloud permissions")
-    print("  • Infrastructure automatically detects and uses ESC configuration")
-    print("  • GitHub Actions will work once VARIABLE_EDITING_PAT is configured")
     print()
 
 

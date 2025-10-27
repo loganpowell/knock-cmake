@@ -30,6 +30,7 @@ jobs:
         run: uv sync
 
       - name: Configure ESC Environment
+        id: esc
         uses: pulumi/esc-action@v1.5.0
         with:
           environment: default/knock-lambda-esc
@@ -124,7 +125,7 @@ jobs:
       - name: Save Outputs to GitHub Variables
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.VARIABLE_EDITING_PAT }}
+          GH_TOKEN: ${{ steps.esc.outputs.VARIABLE_EDITING_PAT }}
         run: |
           BRANCH_NAME="${{ steps.stack.outputs.branch_name }}"
 

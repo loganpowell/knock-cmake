@@ -1,5 +1,5 @@
 name: knock-lambda
-description: Knock ACSM converter Lambda infrastructure
+description: Knock ACSM converter Lambda infrastructure (base and environment stacks)
 runtime:
   name: python
   options:

@@ -1,0 +1,26 @@
+values:
+  user: ${context.pulumi.user.login}
+
+  aws:
+    region: us-east-2
+    login:
+      fn::open::aws-login:
+        oidc:
+          duration: 1h
+          # This ARN must be updated with the `pulumi_oidc_provider_arn` output after running `pulumi up` locally the first time
+          roleArn: "arn:aws:iam::538069693173:role/knock-lambda-pulumi-esc-main"
+          sessionName: pulumi-environments-session-${user}
+    secrets:
+      dockerHub:
+        fn::open::aws-secrets:
+          region: ${aws.region}
+          login: ${aws.login}
+          get:
+            secretId: "knock-lambda-docker-hub-credential"
+  environmentVariables:
+    AWS_ACCESS_KEY_ID: ${aws.login.accessKeyId}
+    AWS_SECRET_ACCESS_KEY: ${aws.login.secretAccessKey}
+    AWS_SESSION_TOKEN: ${aws.login.sessionToken}
+    AWS_REGION: us-east-2
+    DOCKER_HUB_USERNAME: ${aws.secrets.dockerHub.username}
+    DOCKER_HUB_TOKEN: ${aws.secrets.dockerHub.token}
